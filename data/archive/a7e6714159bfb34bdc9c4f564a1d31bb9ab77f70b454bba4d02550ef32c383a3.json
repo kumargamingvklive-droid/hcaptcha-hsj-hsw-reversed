@@ -1,0 +1,21 @@
+{
+  "version": "a7e6714159bfb34bdc9c4f564a1d31bb9ab77f70b454bba4d02550ef32c383a3",
+  "hsj": {
+    "n_key": "fe1ba43f33813dbac034ef12f34f3ee371b09057e2a25346a652c681edb2104b",
+    "response_decrypt_key": "2fb5e0f6aab9596b2001c45ce12cad34e82d579dfea24409fe9b7de4b82d4028",
+    "payload_encrypt_key": "b2837807eecf9221db94d24337f122d093f70c93efb7d7fc1356e57363e27e28"
+  },
+  "hsw": {
+    "encrypt_key": "2a001a219ddd946f2ea693ed3cf98c5abc36885e37b0b0948c33a98b5315d8a7",
+    "decrypt_key": "f78ef7ba46b5198e8d515dcbc060a78d4aaf3f3985d30110ff7d239388cf874b"
+  },
+  "cipher": "AES-256-GCM",
+  "wire_format": {
+    "hsj": "ct(N) || tag(16) || iv(12) || 0x00",
+    "hsw": "iv(12) || ct(N) || tag(16)"
+  },
+  "aad": "",
+  "verified": {
+    "hsw_encrypt_key": true
+  }
+}
