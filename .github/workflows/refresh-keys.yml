@@ -53,7 +53,13 @@ jobs:
         run: pip install pycryptodome xxhash msgpack jsbeautifier requests
 
       - name: Install Node deps
-        run: npm install --no-audit --no-fund
+        # `npm ci` (not `npm install`) — deterministic install from the
+        # lockfile that NEVER modifies package-lock.json. `npm install`
+        # silently rewrites the lockfile when npm's lockfile schema
+        # differs from what's checked in, leaving the file as an
+        # unstaged tracked-file modification that breaks `git rebase`
+        # in the retry-on-push-rejection block below.
+        run: npm ci --no-audit --no-fund
 
       - name: Extract all five keys
         id: extract
@@ -115,6 +121,11 @@ jobs:
             exit 0
           fi
           git commit -m "auto: refresh keys for build ${VERSION:0:12}"
+
+          # Reset any unstaged modifications to tracked files (e.g. a
+          # lockfile npm touched, line-ending drift) so the rebase
+          # below sees a clean working tree. Our commit is preserved.
+          git checkout -- .
 
           # Retry up to 5 times: another push may land between fetch and push.
           for attempt in 1 2 3 4 5; do
