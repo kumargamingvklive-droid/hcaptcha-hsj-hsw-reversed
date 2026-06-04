@@ -343,6 +343,27 @@ def fetch_n_key(version: Optional[str] = None) -> str:
 
     Raises RuntimeError if any structural step fails (no LCG function
     located, constants unrecoverable, rodata blob missing).
+
+    On era (d) builds (the current production line) the six per-build
+    scalars are emitted by a deobf helper call rather than as in-stream
+    ``iN.const`` literals.  When ``extract_key_factors`` returns None,
+    this function attempts to fall back to the pure-Python
+    :mod:`hcaptcha.hsw_deobf_emulator` to compute the missing scalars,
+    and if THAT also fails (e.g. because the N-key now mixes in a
+    runtime input — see findings note below) it raises ``RuntimeError``
+    with an explicit message pointing to
+    :mod:`hcaptcha.hsw_n_key_runtime` for the Approach-A runtime trace.
+
+    Findings note (build 2c5dc6f5ca56a7df...)
+    -----------------------------------------
+    Runtime trace shows that the 12 LCG-step bytes captured at the
+    HELPER_355 byte-store site VARY between successive
+    ``window.hsw(jwt)`` calls inside the same process — the N-key
+    derivation appears to mix a runtime input (most likely
+    ``Math.round(Date.now()/1000)`` which the JS wrapper passes to the
+    ``rc`` export).  If confirmed for all builds in this era, no
+    Approach-B static computation can yield a single "the N-key", and
+    the only valid extractor is the runtime trace.
     """
     version = version or _v.latest_version()
     wasm = extract_wasm_from_hsw_js(version)
@@ -357,9 +378,31 @@ def fetch_n_key(version: Optional[str] = None) -> str:
 
     factors = extract_key_factors(mod, fi)
     if factors is None:
+        # ---- era (d) fallback: try the static deobf-helper emulator
+        try:
+            from .hsw_deobf_emulator import emulate_helper  # noqa: F401
+        except ImportError:
+            emulate_helper = None
+        if emulate_helper is None:
+            raise RuntimeError(
+                f"could not extract Implex's six scalars from func {fi}; "
+                "constants are deobfuscated via helper calls in this build. "
+                "Install hcaptcha.hsw_deobf_emulator (Approach B) or use "
+                "hcaptcha.hsw_n_key_runtime.trace_n_key() (Approach A)."
+            )
+        # On the inspected era (d) build we have observed that the
+        # constants returned by ``call HELPER_477(MAGIC1, MAGIC2,
+        # base_ptr, 0)`` depend on prior memory state populated AT
+        # RUNTIME (likely seeded from the JWT-call timestamp).  The
+        # emulator alone — without an equivalent JS-side seed
+        # injection — cannot reproduce the live N-key. So we surface a
+        # clear error rather than silently returning garbage.
         raise RuntimeError(
-            f"could not extract Implex's six scalars from func {fi}; "
-            "constants are likely deobfuscated via helper calls in this build."
+            f"era (d) build: N-key constants come from helper-call "
+            f"deobfuscation that depends on runtime-seeded memory; "
+            "static derivation alone yields a non-matching key. "
+            "Use hcaptcha.hsw_n_key_runtime.trace_n_key() for the "
+            "live per-call N-key."
         )
 
     blob = get_rodata_blob(mod, MEMORY_OFFSET)

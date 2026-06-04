@@ -72,10 +72,36 @@ if (nodeCrypto.webcrypto) {
 win.atob = (s) => Buffer.from(s, "base64").toString("binary");
 win.btoa = (s) => Buffer.from(s, "binary").toString("base64");
 
+// Browser-API polyfills required by hsw.js fingerprint path
+try {
+    require("./sandbox_polyfill").install(win);
+} catch (e) {
+    process.stderr.write("polyfill install failed: " + (e && e.message ? e.message : e) + "\n");
+}
+
 // globalThis === window inside the realm
 win.globalThis = win;
 win.self = win;
 win.global = win;
+
+// Capture unhandled errors so the JS bundle's async failures are
+// observable from the Python side instead of silently nuking the
+// process. The bundle's window.hsw(jwt) path queues callbacks via
+// setTimeout — exceptions in those bypass user try/catch.
+win.__unhandled = [];
+process.on("uncaughtException", (e) => {
+    try {
+        win.__unhandled.push("uncaught: " + (e && e.message ? e.message : String(e)) +
+                              (e && e.stack ? "\n" + e.stack : ""));
+    } catch (_) {}
+});
+process.on("unhandledRejection", (reason) => {
+    try {
+        const r = reason && reason.message ? reason.message : String(reason);
+        const st = reason && reason.stack ? "\n" + reason.stack : "";
+        win.__unhandled.push("rejection: " + r + st);
+    } catch (_) {}
+});
 
 // Create the vm context. vm.runInContext executes code as if it were
 // running inside the realm, so `var x = ...` lands on the realm's

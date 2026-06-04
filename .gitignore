@@ -195,3 +195,5 @@ hcaptcha_master_keys.json
 *.bin
 *.wasm
 tools/_archive_cache/
+data/hsw.js
+data/hsw_pretty.js
