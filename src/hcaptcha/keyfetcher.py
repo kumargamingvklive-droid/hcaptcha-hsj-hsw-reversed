@@ -21,7 +21,7 @@ All keys are byte-accurate and verified per-build:
     encrypt output (the HSW encrypt key is mathematically verified).
 
 USAGE:
-    from keyfetcher import KeyFetcher
+    from .keyfetcher import KeyFetcher
     out = KeyFetcher().fetch()
     # {
     #   'version': '...',
@@ -37,12 +37,9 @@ import os
 import sys
 import time
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-if HERE not in sys.path:
-    sys.path.insert(0, HERE)
 
-from log import Logger
-import version as _v
+from .log import Logger
+from . import version as _v
 
 
 class KeyFetcher:
@@ -61,7 +58,7 @@ class KeyFetcher:
         self.log.info("extracting HSJ keys (AST patch)...",
                       start=t0, end=time.time())
 
-        from keyfetcher_hsj import HSJKeyFetcher
+        from .hsj import HSJKeyFetcher
         hsj_out = HSJKeyFetcher(self.version, log=self.log).fetch_keys()
         hsj_keys = {
             "n_key":                hsj_out["n_key"],
@@ -73,7 +70,7 @@ class KeyFetcher:
         self.log.info("extracting HSW keys (WASM bytecode patch)...",
                       start=t0, end=time.time())
 
-        from keyfetcher_hsw_keys import HSWKeyFetcher
+        from .hsw import HSWKeyFetcher
         hsw_out = HSWKeyFetcher(self.version, log=self.log).fetch()
         hsw_keys = {
             "encrypt_key": hsw_out["encrypt_key"],

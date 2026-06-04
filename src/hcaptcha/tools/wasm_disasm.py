@@ -680,7 +680,7 @@ def _load_wasm(arg: str) -> bytes:
         with open(arg, "rb") as f:
             return f.read()
     if arg in ("hsw", "hsw.js"):
-        from keyfetcher_hsw import HSWAnalyzer
+        from ..hsw_bridge import HSWAnalyzer
         info = HSWAnalyzer().analyze()
         return bytes.fromhex(info["wasm_bytes_hex"])
     raise ValueError(f"don't know how to load {arg!r}")

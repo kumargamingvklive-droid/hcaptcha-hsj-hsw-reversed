@@ -43,7 +43,7 @@ keys, decoder functions) closure-private.
 | Compile target   | asm.js-style hand-rolled compiled JS                    | wasm-bindgen wrapper over Rust → WebAssembly                |
 | Crypto location  | JS-side AES in linear `Int8Array` heap                  | WASM-side AES with `aes-soft` fixslice32                    |
 | Keys extracted   | `n_key`, `response_decrypt_key`, `payload_encrypt_key` | `encrypt_key`, `decrypt_key`                                |
-| Extraction       | AST patch + drive (`keyfetcher_hsj.py`)                | WASM bytecode patch + drive (`keyfetcher_hsw_keys.py`)      |
+| Extraction       | AST patch + drive (`hcaptcha.hsj`)                     | WASM bytecode patch + drive (`hcaptcha.hsw`)                |
 | Verification     | Direct decrypt round-trip                               | AES-256-GCM authentication-tag check                        |
 
 ```python
@@ -55,9 +55,13 @@ keys = KeyFetcher().fetch()
 ## Repo layout
 
 ```
-hcaptcha-hsj-hsw/
+hcaptcha-hsj-hsw-reversed/
 ├── README.md
-├── docs/                           ← you are here
+├── LICENSE
+├── pyproject.toml
+├── package.json + package-lock.json   Node deps (acorn, astring, jsdom, canvas)
+│
+├── docs/                              ← you are here
 │   ├── 00-architecture.md
 │   ├── 01-hsj-bundle.md
 │   ├── 02-hsw-bundle.md
@@ -67,24 +71,28 @@ hcaptcha-hsj-hsw/
 │   ├── 06-fixslice32.md
 │   └── 07-wasm-patching.md
 │
-├── version.py                      ← asset-version discovery
+├── examples/
+│   └── fetch_all.py                   ← drop-in usage example
 │
-├── keyfetcher.py                   ← unified entry: all 5 keys
-├── keyfetcher_hsj.py               HSJ keys (AST-patch method)
-├── keyfetcher_hsw.py               HSW bridge + analyzer (live encrypt/decrypt service)
-├── keyfetcher_hsw_keys.py          HSW keys (bytecode-patch method)
-│
-├── wasm_disasm.py                  WASM 1.0 disassembler + structural heuristics
-├── wasm_writer.py                  WASM 1.0 byte-perfect re-emitter / patcher
-├── fixslice_inverse.py             RustCrypto fixslice32 bitslice / inv_bitslice (reference)
-│
-├── deobf.py + deobf.js             deobfuscation pipeline (Python wrapper + Node AST processor)
-│
-├── algorithm.py                    AES-256-GCM + xxhash + msgpack helpers (HSJ-compat)
-├── log.py                          minimal Logger
-│
-├── package.json + package-lock.json   Node dependencies (acorn, astring)
-└── node_modules/                    install once: `npm install`
+└── src/hcaptcha/                      ← Python package
+    ├── __init__.py                    exports KeyFetcher, HSJKeyFetcher, ...
+    ├── __main__.py                    `python -m hcaptcha`
+    ├── keyfetcher.py                  unified entry: all 5 keys
+    ├── hsj.py                         HSJ keys (AST-patch method)
+    ├── hsw.py                         HSW keys (bytecode-patch method)
+    ├── hsw_bridge.py                  HSWBridge + HSWAnalyzer (encrypt/decrypt as a service)
+    ├── algorithm.py                   AES-256-GCM + xxhash + msgpack helpers (HSJ-compat)
+    ├── log.py                         minimal Logger
+    ├── version.py                     asset-version discovery
+    │
+    └── tools/                         ← internal infrastructure
+        ├── __init__.py
+        ├── wasm_disasm.py             WASM 1.0 disassembler + structural locators
+        ├── wasm_writer.py             WASM 1.0 byte-perfect re-emitter / patcher
+        ├── fixslice_inverse.py        RustCrypto fixslice32 reference
+        ├── deobf.py + deobf.js        12-pass deobfuscation pipeline
+        ├── js_runtime.py              Python side of the Node + jsdom sandbox
+        └── _js_runner.js              Node side of the sandbox
 ```
 
 ## End-to-end pipeline
@@ -92,10 +100,10 @@ hcaptcha-hsj-hsw/
 ```bash
 # Install deps (once)
 pip install pycryptodome xxhash msgpack jsbeautifier requests
-npm install acorn astring
+npm install
 
 # Extract all five keys
-python keyfetcher.py
+PYTHONPATH=src python -m hcaptcha
 ```
 
 Internally:

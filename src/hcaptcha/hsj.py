@@ -19,10 +19,10 @@ Public API:
 import time
 import requests
 import jsbeautifier
-from js_runtime import JsRuntime
-from log import Logger
+from .tools.js_runtime import JsRuntime
+from .log import Logger
 
-import version as _v
+from . import version as _v
 
 
 class HSJKeyFetcher:

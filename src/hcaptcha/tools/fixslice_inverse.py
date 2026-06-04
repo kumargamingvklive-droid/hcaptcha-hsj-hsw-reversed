@@ -217,7 +217,7 @@ def main():
     if not args.brute:
         return
 
-    from keyfetcher_hsw import HSWBridge, HSWAnalyzer
+    from ..hsw_bridge import HSWBridge, HSWAnalyzer
     import version as _v
     version = _v.latest_version()
     info = HSWAnalyzer(version).analyze()

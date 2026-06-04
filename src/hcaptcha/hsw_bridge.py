@@ -86,10 +86,10 @@ import hashlib
 import time
 import collections
 import requests
-from js_runtime import JsRuntime
-from log import Logger
+from .tools.js_runtime import JsRuntime
+from .log import Logger
 
-import version as _v
+from . import version as _v
 
 
 def _new_runtime():

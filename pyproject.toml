@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hcaptcha"
+version = "1.0.0"
+description = "hCaptcha hsj/hsw master-key extraction — byte-accurate per build"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+authors = [{ name = "jujucodings" }]
+dependencies = [
+    "pycryptodome>=3.20",
+    "xxhash>=3.4",
+    "msgpack>=1.0",
+    "jsbeautifier>=1.15",
+    "requests>=2.31",
+]
+
+[project.scripts]
+hcaptcha = "hcaptcha.__main__:main"
+
+[project.urls]
+Repository = "https://github.com/CircuitSavage/hcaptcha-hsj-hsw-reversed"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"hcaptcha.tools" = ["*.js"]

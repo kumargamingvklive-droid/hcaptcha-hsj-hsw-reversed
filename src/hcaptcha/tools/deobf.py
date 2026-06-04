@@ -13,7 +13,7 @@ import sys
 import jsbeautifier
 import requests
 
-import version as _v
+from .. import version as _v
 
 
 def fetch_and_deobfuscate(name: str, version: str | None = None,

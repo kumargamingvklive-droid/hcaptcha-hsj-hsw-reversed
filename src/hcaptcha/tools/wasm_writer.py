@@ -32,7 +32,7 @@ import sys
 import tempfile
 
 # Reuse the decoder + module parser already battle-tested in wasm_disasm.
-from wasm_disasm import (
+from .wasm_disasm import (
     WasmModule,
     decode_uleb,
     decode_sleb,
@@ -499,7 +499,7 @@ def load_wasm_bytes(arg: str) -> bytes:
             raise ValueError(f"{arg}: no 'wasm_bytes_hex' key")
         return bytes.fromhex(h)
     if arg in ("hsw", "hsw.js"):
-        from keyfetcher_hsw import HSWAnalyzer
+        from ..hsw_bridge import HSWAnalyzer
         info = HSWAnalyzer().analyze()
         return bytes.fromhex(info["wasm_bytes_hex"])
     raise ValueError(f"don't know how to load {arg!r}")

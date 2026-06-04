@@ -47,15 +47,12 @@ import sys
 import time
 import requests
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-if HERE not in sys.path:
-    sys.path.insert(0, HERE)
 
-from wasm_disasm import WasmModule, _load_wasm
-from wasm_writer import ModuleWriter, encode_uleb, encode_sleb
-from js_runtime import JsRuntime
-from log import Logger
-import version as _v
+from .tools.wasm_disasm import WasmModule, _load_wasm
+from .tools.wasm_writer import ModuleWriter, encode_uleb, encode_sleb
+from .tools.js_runtime import JsRuntime
+from .log import Logger
+from . import version as _v
 
 
 # Two independent scratch slots so we can capture both directions in
@@ -74,7 +71,7 @@ SENTINEL_VAL_DEC = -559038737   # 0xDEADBEEF (signed)
 def _read_magics_from_deobf(version: str) -> dict:
     """Run deobf.py on the live hsw.js, read the encrypt + decrypt
     magic numbers from the deobf source's wbg wrappers."""
-    from deobf import fetch_and_deobfuscate
+    from .tools.deobf import fetch_and_deobfuscate
     deobf_path = fetch_and_deobfuscate("hsw.js", version, quiet=True)
     src = open(deobf_path, "r", encoding="utf-8").read()
 
@@ -121,7 +118,7 @@ def _find_key_schedule_for_magic(mod: WasmModule, vc_idx: int,
     is a (i32,i32)->() function with strong fixslice32 mask presence.
     That N is the key-schedule function for this direction.
     """
-    from wasm_disasm import find_fixslice_functions
+    from .tools.wasm_disasm import find_fixslice_functions
     fixslice_with_size = {}
     for s, fi, masks in find_fixslice_functions(mod, top_n=40):
         # Filter to canonical AES fixslice masks
@@ -279,7 +276,7 @@ class HSWKeyFetcher:
                       start=t0, end=time.time())
 
         # 2. Load WASM, locate dispatcher
-        from keyfetcher_hsw import HSWAnalyzer
+        from .hsw_bridge import HSWAnalyzer
         info = HSWAnalyzer(self.version, log=self.log).analyze()
         orig_wasm = bytes.fromhex(info["wasm_bytes_hex"])
         mod = WasmModule(orig_wasm)
