@@ -77,6 +77,31 @@ class KeyFetcher:
             "decrypt_key": hsw_out["decrypt_key"],
         }
 
+        # 3. Verify decrypt_key by construct-then-decrypt-through-bundle.
+        # The hsw.py fetcher only verifies encrypt_key (it decrypts the
+        # encrypt output with our recovered key). decrypt_key needs the
+        # opposite path: we encrypt with it in pure Python, then ask
+        # the bundle to decrypt and check we get the plaintext back.
+        dec_verified = False
+        try:
+            from . import hsw_crypto
+            from .hsw_bridge import HSWBridge
+            dec_key = bytes.fromhex(hsw_out["decrypt_key"])
+            bridge  = HSWBridge(self.version, log=self.log)
+            probe   = b"verify-dec-key-probe-" + os.urandom(8)
+            blob    = hsw_crypto.encrypt(probe, dec_key)
+            decoded = bridge.decrypt(blob)
+            dec_verified = (decoded == probe)
+            if dec_verified:
+                self.log.info("decrypt key verified OK (bundle round-trip)",
+                              start=t0, end=time.time())
+            else:
+                self.log.info("decrypt key verification FAILED (mismatch)",
+                              start=t0, end=time.time())
+        except Exception as e:
+            self.log.info(f"decrypt key verification skipped: {e}",
+                          start=t0, end=time.time())
+
         self.log.info(f"all 5 keys fetched in {time.time()-t0:.1f}s",
                       start=t0, end=time.time())
 
@@ -91,7 +116,19 @@ class KeyFetcher:
             },
             "aad":         "",
             "verified": {
-                "hsw_encrypt_key": hsw_out.get("verified", False),
+                "hsw_encrypt_key": bool(hsw_out.get("verified", False)),
+                "hsw_decrypt_key": bool(dec_verified),
+            },
+            "pow": {
+                "algorithm": "Hashcash v1 + SHA-1",
+                "library":   "rust-hashcash/0.3.3 (sha1 feature)",
+                "stamp_format": "1:bits:date:resource:ext:rand:counter",
+                "date_format":  "YYYYMMDD (UTC)",
+                "verified_in_wasm": True,
+                "wasm_evidence": (
+                    "SHA-1 K-constants 0x5A827999 and 0x6ED9EBA1 found "
+                    "as i32.const literals in code section"
+                ),
             },
         }
 
