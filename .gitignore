@@ -197,3 +197,4 @@ hcaptcha_master_keys.json
 tools/_archive_cache/
 data/hsw.js
 data/hsw_pretty.js
+tools/n_token_decrypt_probe.last.json

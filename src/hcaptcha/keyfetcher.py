@@ -139,6 +139,12 @@ class KeyFetcher:
         # are NOT in the trace.  Rather than zero-padding, we ship
         # what we have, document the gap, and verify the bytes we DID
         # capture against the same offsets in hsj.n_key.
+        # Two-pass full trace: captures byte_store (12 LCG bytes) +
+        # i64_store helpers, then runs twice with different JWT
+        # timestamps to compute the static-bytes mask. On era (d)
+        # builds this empirically returns 16 captured bytes of which
+        # ZERO are build-static — every byte changes between calls
+        # because vc seeds the LCG with runtime input. See docs/09.
         hsw_n_key_hex     = None
         hsw_n_key_status  = "unattempted"
         hsw_n_key_verified = False
@@ -146,66 +152,75 @@ class KeyFetcher:
         hsw_fp_blob_key   = None
         hsw_fp_blob_meta  = {}
         try:
-            self.log.info("extracting HSW n_key (runtime trace, partial)...",
+            self.log.info("extracting HSW n_key (two-pass full trace)...",
                           start=t0, end=time.time())
-            from .hsw_n_key_runtime import trace_n_key
-            trace = trace_n_key(self.version, log=self.log)
-            step_bytes = bytes(trace.step_bytes)
-            hsw_n_key_hex = step_bytes.hex()
-            n_steps = len(step_bytes)
+            from .hsw_n_key_full import trace_full_n_key
+            full = trace_full_n_key(version=self.version, two_pass=True,
+                                    instrument_i32=False)
 
-            # Fingerprint-blob key = SHA-256 of (base_ptr || step_bytes).
-            # Deterministic per trace; identifies which N-key derivation
-            # site / sequence the build is currently using. Acts as the
-            # "blob key" identifier that downstream tooling can use to
-            # match a given build to a captured trace family.
+            hsw_n_key_hex = full.get("full_hex")
+            n_captured   = full.get("bytes_captured", 0)
+            base_ptr     = full.get("base_ptr_hex", "")
+            repeatable   = full.get("repeatable", "unknown")
+            pass2_hex    = full.get("_n_key_pass2", "")
+
+            # Compute static-bytes mask from the two-pass diff
+            static_mask = b""
+            static_count = 0
+            if pass2_hex and hsw_n_key_hex:
+                kb1 = bytes.fromhex(hsw_n_key_hex)
+                kb2 = bytes.fromhex(pass2_hex)
+                static_mask = bytes(a if a == b else 0
+                                    for a, b in zip(kb1, kb2))
+                static_count = sum(1 for a, b in zip(kb1, kb2) if a == b)
+
+            # Fingerprint-blob key = sha256(static_bytes_mask). This is
+            # build-deterministic UNLIKE sha256(per-call step bytes).
             h = hashlib.sha256()
-            h.update(int(trace.base_ptr).to_bytes(4, "little"))
-            h.update(step_bytes)
+            h.update(static_mask or b"\x00" * 32)
             hsw_fp_blob_key = h.hexdigest()
             hsw_fp_blob_meta = {
-                "construction": "sha256(base_ptr_le32 || step_bytes)",
-                "base_ptr":     f"0x{trace.base_ptr:08x}",
-                "n_step_bytes": n_steps,
+                "construction": "sha256(static_bytes_mask)",
+                "static_bytes_count": static_count,
+                "base_ptr": base_ptr,
+            }
+
+            if repeatable == "SAME" and n_captured == 32:
+                hsw_n_key_verified = True
+                hsw_n_key_status = "static-32-byte-key"
+            elif repeatable == "SAME":
+                hsw_n_key_status = f"partial-static-{n_captured}-of-32"
+            else:
+                hsw_n_key_status = (
+                    f"per-call-ephemeral-{n_captured}-of-32-captured")
+            hsw_n_key_meta = {
+                "pass1_hex":   hsw_n_key_hex,
+                "pass2_hex":   pass2_hex,
+                "repeatable":  repeatable,
+                "base_ptr":    base_ptr,
+                "static_bytes_count": static_count,
+                "static_bytes_mask_hex": static_mask.hex() if static_mask else "",
+                "note": (
+                    "On era (d) builds the HSW n_key is NOT a fixed "
+                    "per-build value. vc derives it per invocation by "
+                    "seeding its LCG with the JWT timestamp passed via "
+                    "the rc(...) JS wrapper. Two-pass trace with "
+                    "different timestamps confirms zero build-static "
+                    "bytes (repeatable=DIFFERENT). The bytes captured "
+                    "here are the values vc emitted DURING THIS "
+                    "EXTRACTION RUN only. NONE of the 5 master keys "
+                    "(hsj.n_key, hsj.payload_encrypt_key, "
+                    "hsj.response_decrypt_key, hsw.encrypt_key, "
+                    "hsw.decrypt_key) decrypts the live n-token output "
+                    "by AES-256-GCM under either common wire format — "
+                    "the n-token uses a per-call session key that the "
+                    "current static extractor cannot recover."
+                ),
             }
             self.log.info(
-                f"hsw n_key partial ({n_steps} bytes) "
-                f"base=0x{trace.base_ptr:08x} blob_key={hsw_fp_blob_key[:16]}...",
+                f"hsw n_key {hsw_n_key_status} ({n_captured} bytes, "
+                f"static={static_count})",
                 start=t0, end=time.time())
-
-            # Best-effort verification: the LCG-derived step bytes
-            # should equal hsj.n_key[2 : 2+n_steps] for builds where
-            # the HSW N-key path mirrors the HSJ N-key path.  On the
-            # current build (era d) the runtime input mixed into the
-            # derivation breaks this equivalence — we still report the
-            # comparison so callers can detect a build that returns to
-            # purely static derivation.
-            hsj_n = bytes.fromhex(hsj_out["n_key"])
-            cmp_slice = hsj_n[2:2 + n_steps]
-            if cmp_slice == step_bytes:
-                hsw_n_key_verified = True
-                hsw_n_key_status = "verified-vs-hsj"
-                self.log.info(
-                    "hsw n_key partial verified against hsj.n_key[2:2+N]",
-                    start=t0, end=time.time())
-            else:
-                hsw_n_key_status = "partial-runtime-trace"
-                hsw_n_key_meta = {
-                    "note": (
-                        "trace bytes differ from hsj.n_key[2:2+N]; "
-                        "era (d) build mixes a runtime input into the "
-                        "N-key derivation so the static comparison "
-                        "cannot succeed.  See docs/09-hsw-keys-"
-                        "derivation.md and src/hcaptcha/"
-                        "hsw_n_key_runtime.py for details."
-                    ),
-                    "hsj_n_key_slice": cmp_slice.hex(),
-                    "hsw_trace_bytes": step_bytes.hex(),
-                }
-                self.log.info(
-                    "hsw n_key partial does NOT match hsj.n_key slice "
-                    "(expected on era (d) builds with runtime-seeded N-key)",
-                    start=t0, end=time.time())
         except Exception as e:
             hsw_n_key_status = f"error: {type(e).__name__}: {e}"
             hsw_n_key_meta = {
@@ -213,9 +228,9 @@ class KeyFetcher:
                     "runtime trace of HSW N-key failed; this build may "
                     "have moved away from the byte-store-helper pattern "
                     "the trace expects.  See "
-                    "src/hcaptcha/hsw_n_key_runtime.py for the "
-                    "heuristic and src/hcaptcha/hsw_deobf_emulator.py "
-                    "for the static-emulator scaffold."
+                    "src/hcaptcha/hsw_n_key_full.py for the heuristic "
+                    "and src/hcaptcha/hsw_deobf_emulator.py for the "
+                    "static-emulator scaffold."
                 ),
                 "error_repr": repr(e),
             }

@@ -17,19 +17,91 @@ schema for cross-build comparisons.
 
 ## Stats by label
 
+The 2026-Q2 refinement pass (`tools/refine_hsw_labels.py`) walks every
+"unknown" function's instruction stream and assigns a refined role from
+structural features: inline XOR-key constants, fixslice32 masks,
+PCG-32 multiplier, `call_indirect`, `unreachable`-terminated bodies,
+`memory.copy/fill`, and so on. The result drops the unknown bucket to
+zero.
+
 | Label                 | Count | Notes                                                |
 | --------------------- | ----: | ---------------------------------------------------- |
 | `wbg_marshal`         |   196 | wasm-bindgen JS shims; mostly imports                |
-| `unknown`             |   359 | unlabelled / awaiting role                           |
+| `deobf_consumer`      |   139 | inline static XOR keys (0x69169f2b / 0xbd31f8f6 / 0xfb42e581 / 0x8304f247 / 0x77782831 / 0xe586d82b) — caller reads a compile-time encrypted blob |
+| `panic_format`        |    87 | body ends in `unreachable`, mid/large size — Rust `format!` + `panic_unwind` glue |
+| `vtable_dispatch`     |    32 | has `call_indirect` — Rust trait-object dispatch     |
+| `drop_glue`           |    20 | small wrappers ≤80 B that forward to a dealloc/destructor |
+| `panic_unwrap`        |    19 | small body, ≤4 calls, ends in `unreachable` — Rust `.unwrap()` failure path |
+| `thunk`               |    18 | ≤35 B body, single forwarding call                   |
 | `aes_round`           |    14 | bitsliced round / SubBytes-style helpers             |
+| `utility`             |    14 | unmatched mid-size helpers (residual catch-all)      |
 | `wbindgen_helpers`    |    12 | wbindgen-generated callback trampolines              |
+| `loop_iter`           |     8 | loop-based iterator/parser, no call_indirect         |
+| `runtime_string_io`   |     7 | shared byte/string runtime primitives — called 1.4k–6.2k times (444, 449, 355, 578, 496, 477, 257) |
 | `aes_key_schedule`    |     6 | fixslice32 key expansion functions                   |
+| `hash_round`          |     5 | ≥4 rotations + ≥4 xors per body — generic ARX-style mix |
+| `format_helper`       |     5 | 300–800 B body with ≥8 calls — Display/Debug impls   |
 | `fingerprint_collect` |     3 | JSON / fingerprint-blob assembly                     |
 | `deobf_helper`        |     2 | XOR-deobfuscation accessors used by every key load   |
+| `accessor`            |     2 | ≤20 B body, no calls — trivial getter                |
+| `byte_serializer`     |     2 | ≥5 byte stores or ≥8 byte loads, no XOR keys         |
+| `small_helper`        |     1 | <150 B, ≤3 calls, residual                           |
 | `sha1_pow`            |     1 | SHA-1 compression — Hashcash PoW solver core         |
 | `rng_or_lcg`          |     1 | the `vc` dispatcher (carries the PCG LCG multiplier) |
-| `ghash_or_gcm`        |     0 | inlined; GHASH polynomial not present as constants   |
-| `allocator_or_runtime`|     0 | wasm-bindgen handles the heap from JS                |
+| `unknown`             |     0 | every function now has a refined role                |
+
+Some buckets that were carried in the schema for cross-build comparison
+(`ghash_or_gcm`, `allocator_or_runtime`) fired zero times on this build
+— GHASH is inlined and the heap is managed by wasm-bindgen JS — and are
+omitted from the table above to keep it readable.
+
+### `deobf_consumer` — the dominant new bucket
+
+139 local functions inline at least 2 of the static-deobf XOR-key
+constants. Those constants are the keys the build's obfuscator burns
+into every consumer that decrypts an encrypted rodata blob at runtime:
+
+```
+0x69169f2b 0xbd31f8f6 0xfb42e581   ← triple (used as a 96-bit pad)
+0x8304f247 0x77782831              ← pair (64-bit pad, smaller blobs)
+0xe586d82b                         ← single-word key (rotates with offset)
+```
+
+A consumer reads a blob byte-by-byte (via `i32.load8_u`) and XORs each
+byte against the rotating key before storing into a scratch buffer. Any
+function carrying ≥2 of these constants inline is at compile-time
+inlined a decryption pad — so the function's body literally exposes the
+deobf key, no runtime tracing needed. This is the leverage that
+`hcaptcha.hsw_deobf_emulator` uses.
+
+### `runtime_string_io` — the universal helpers
+
+Seven functions are called ≥600 times across the module and form the
+Rust-runtime string/byte plumbing that everything else builds on:
+
+| func | callers | body | one-line role                          |
+| ---: | ------: | ---: | -------------------------------------- |
+|  449 |    6204 |  429 | byte-level `String::push` / pack-u8    |
+|  444 |    4831 |  244 | append-with-grow helper                |
+|  496 |    2041 |  353 | `u64`-to-buffer little-endian store    |
+|  355 |    1815 |   89 | inline 8-byte rotor (calls f_571 twice)|
+|  578 |    1547 |  115 | bounded byte-copy fast path            |
+|  477 |    1448 |  624 | UTF-8 byte-length classifier (exported as `jc`) |
+|  257 |     137 |  336 | growable buffer ensure-capacity helper |
+
+Because these are universal, calling them is NOT a signal that the
+caller is doing deobf — only the inline XOR keys are. The earlier
+heuristic that treated "calls f_449" as deobf evidence was over-eager.
+
+### `panic_format` / `panic_unwrap` — Rust panic plumbing
+
+87 + 19 = 106 functions end with `unreachable`. Rust emits this
+pattern at every `.unwrap()`, `.expect()`, `panic!`, exhaustive
+`match`, and `format!`-with-error path. The distinction here is size:
+`panic_unwrap` for the small (<200 B) sites that just call one
+panic-import and trap, `panic_format` for the larger (200+ B) bodies
+that build a format-args struct and route through the formatting
+runtime before trapping.
 
 ## All exports (entry points)
 

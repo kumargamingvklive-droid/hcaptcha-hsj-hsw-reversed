@@ -3,17 +3,28 @@
   "n_imports": 164,
   "n_local_funcs": 430,
   "label_counts": {
-    "wbindgen_helpers": 12,
     "wbg_marshal": 196,
+    "deobf_consumer": 139,
+    "panic_format": 87,
+    "vtable_dispatch": 32,
+    "drop_glue": 20,
+    "panic_unwrap": 19,
+    "thunk": 18,
+    "utility": 14,
     "aes_round": 14,
+    "wbindgen_helpers": 12,
+    "loop_iter": 8,
+    "runtime_string_io": 7,
     "aes_key_schedule": 6,
-    "ghash_or_gcm": 0,
-    "sha1_pow": 1,
-    "rng_or_lcg": 1,
+    "hash_round": 5,
+    "format_helper": 5,
     "fingerprint_collect": 3,
     "deobf_helper": 2,
-    "allocator_or_runtime": 0,
-    "unknown": 359
+    "accessor": 2,
+    "byte_serializer": 2,
+    "small_helper": 1,
+    "sha1_pow": 1,
+    "rng_or_lcg": 1
   },
   "functions": [
     {
@@ -1987,98 +1998,106 @@
     {
       "func_idx": 164,
       "name": "f_164",
-      "role": "unknown",
+      "role": "hash_round",
       "signature": "(i32,i32,i32)->()",
       "body_bytes": 1188,
       "callers": 4,
       "callees": 31,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "rot=12 xor=12"
     },
     {
       "func_idx": 165,
       "name": "f_165",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 3914,
       "callers": 3,
       "callees": 165,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 166,
       "name": "f_166",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,f64)->()",
       "body_bytes": 761,
       "callers": 33,
       "callees": 35,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 167,
       "name": "f_167",
-      "role": "unknown",
+      "role": "utility",
       "signature": "(i32,i32)->()",
       "body_bytes": 31,
       "callers": 4,
       "callees": 4,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "size=31 calls=4 blocks=0"
     },
     {
       "func_idx": 168,
       "name": "f_168",
-      "role": "unknown",
+      "role": "drop_glue",
       "signature": "(i32)->()",
       "body_bytes": 24,
       "callers": 0,
       "callees": 3,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "small drop helper (calls=3)"
     },
     {
       "func_idx": 169,
       "name": "f_169",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->()",
       "body_bytes": 8675,
       "callers": 99,
       "callees": 407,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (3)"
     },
     {
       "func_idx": 170,
       "name": "f_170",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32,i32)->()",
       "body_bytes": 249,
       "callers": 3,
       "callees": 8,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "format! + unreachable (size=249)"
     },
     {
       "func_idx": 171,
       "name": "f_171",
-      "role": "unknown",
+      "role": "vtable_dispatch",
       "signature": "(i32)->()",
       "body_bytes": 604,
       "callers": 0,
       "callees": 38,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "call_indirect + 37 direct"
     },
     {
       "func_idx": 172,
@@ -2095,26 +2114,28 @@
     {
       "func_idx": 173,
       "name": "f_173",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32)->()",
       "body_bytes": 147,
       "callers": 5,
       "callees": 9,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "format! + unreachable (size=147)"
     },
     {
       "func_idx": 174,
       "name": "f_174",
-      "role": "unknown",
+      "role": "thunk",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 13,
       "callers": 0,
       "callees": 1,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "forwards to f_268"
     },
     {
       "func_idx": 175,
@@ -2131,14 +2152,15 @@
     {
       "func_idx": 176,
       "name": "f_176",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 139,
       "callers": 3,
       "callees": 8,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (3)"
     },
     {
       "func_idx": 177,
@@ -2155,38 +2177,41 @@
     {
       "func_idx": 178,
       "name": "f_178",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32)->(i32)",
       "body_bytes": 396,
       "callers": 2,
       "callees": 19,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 179,
       "name": "f_179",
-      "role": "unknown",
+      "role": "panic_unwrap",
       "signature": "(i32)->()",
       "body_bytes": 99,
       "callers": 0,
       "callees": 4,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "unreachable, calls=4"
     },
     {
       "func_idx": 180,
       "name": "f_180",
-      "role": "unknown",
+      "role": "utility",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 27,
       "callers": 0,
       "callees": 4,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "size=27 calls=4 blocks=0"
     },
     {
       "func_idx": 181,
@@ -2203,134 +2228,145 @@
     {
       "func_idx": 182,
       "name": "f_182",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->()",
       "body_bytes": 996,
       "callers": 3,
       "callees": 29,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 183,
       "name": "f_183",
-      "role": "unknown",
+      "role": "panic_unwrap",
       "signature": "(i32,i32,i32)->(i32)",
       "body_bytes": 138,
       "callers": 102,
       "callees": 2,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "unreachable, calls=2"
     },
     {
       "func_idx": 184,
       "name": "f_184",
-      "role": "unknown",
+      "role": "utility",
       "signature": "(i32,i32)->()",
       "body_bytes": 74,
       "callers": 5,
       "callees": 7,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "size=74 calls=7 blocks=0"
     },
     {
       "func_idx": 185,
       "name": "f_185",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 272,
       "callers": 4,
       "callees": 13,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 186,
       "name": "f_186",
-      "role": "unknown",
+      "role": "utility",
       "signature": "(i32,i32,i32)->()",
       "body_bytes": 85,
       "callers": 2,
       "callees": 9,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "size=85 calls=9 blocks=0"
     },
     {
       "func_idx": 187,
       "name": "f_187",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 2117,
       "callers": 2,
       "callees": 145,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 188,
       "name": "f_188",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32,i32)->()",
       "body_bytes": 254,
       "callers": 2,
       "callees": 15,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "format! + unreachable (size=254)"
     },
     {
       "func_idx": 189,
       "name": "f_189",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->()",
       "body_bytes": 7450,
       "callers": 4,
       "callees": 342,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 190,
       "name": "f_190",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32)->()",
       "body_bytes": 98,
       "callers": 9,
       "callees": 5,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "format! + unreachable (size=98)"
     },
     {
       "func_idx": 191,
       "name": "f_191",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32)->()",
       "body_bytes": 158,
       "callers": 8,
       "callees": 9,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (3)"
     },
     {
       "func_idx": 192,
       "name": "f_192",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->()",
       "body_bytes": 1346,
       "callers": 30,
       "callees": 61,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (3)"
     },
     {
       "func_idx": 193,
@@ -2347,86 +2383,93 @@
     {
       "func_idx": 194,
       "name": "f_194",
-      "role": "unknown",
+      "role": "panic_unwrap",
       "signature": "(i32)->()",
       "body_bytes": 96,
       "callers": 6,
       "callees": 4,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "unreachable, calls=4"
     },
     {
       "func_idx": 195,
       "name": "f_195",
-      "role": "unknown",
+      "role": "panic_unwrap",
       "signature": "(i32)->(i32)",
       "body_bytes": 41,
       "callers": 4,
       "callees": 1,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "unreachable, calls=1"
     },
     {
       "func_idx": 196,
       "name": "f_196",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 546,
       "callers": 0,
       "callees": 19,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 197,
       "name": "hc",
-      "role": "unknown",
+      "role": "vtable_dispatch",
       "signature": "(i32,i32,i32)->(i32)",
       "body_bytes": 61,
       "callers": 0,
       "callees": 3,
       "is_exported": true,
       "export_name": "hc",
-      "is_import": false
+      "is_import": false,
+      "role_note": "call_indirect + 2 direct"
     },
     {
       "func_idx": 198,
       "name": "f_198",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32)->(i32)",
       "body_bytes": 1132,
       "callers": 3,
       "callees": 41,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "large panic helper (size=1132)"
     },
     {
       "func_idx": 199,
       "name": "f_199",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 4511,
       "callers": 5,
       "callees": 124,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 200,
       "name": "f_200",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32)->()",
       "body_bytes": 147,
       "callers": 2,
       "callees": 9,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "format! + unreachable (size=147)"
     },
     {
       "func_idx": 201,
@@ -2443,26 +2486,28 @@
     {
       "func_idx": 202,
       "name": "f_202",
-      "role": "unknown",
+      "role": "utility",
       "signature": "(i32,i32)->()",
       "body_bytes": 78,
       "callers": 35,
       "callees": 8,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "size=78 calls=8 blocks=0"
     },
     {
       "func_idx": 203,
       "name": "f_203",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->()",
       "body_bytes": 1243,
       "callers": 3,
       "callees": 63,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 204,
@@ -2479,26 +2524,28 @@
     {
       "func_idx": 205,
       "name": "f_205",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32)->(i32)",
       "body_bytes": 3363,
       "callers": 2,
       "callees": 167,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 206,
       "name": "f_206",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32)->()",
       "body_bytes": 1589,
       "callers": 4,
       "callees": 71,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (2)"
     },
     {
       "func_idx": 207,
@@ -2515,218 +2562,236 @@
     {
       "func_idx": 208,
       "name": "f_208",
-      "role": "unknown",
+      "role": "loop_iter",
       "signature": "(i32)->()",
       "body_bytes": 89,
       "callers": 7,
       "callees": 4,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "loop-based iter/parser (size=89)"
     },
     {
       "func_idx": 209,
       "name": "f_209",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32)->(i32)",
       "body_bytes": 595,
       "callers": 4,
       "callees": 24,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 210,
       "name": "f_210",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32)->(i32)",
       "body_bytes": 701,
       "callers": 9,
       "callees": 16,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "large panic helper (size=701)"
     },
     {
       "func_idx": 211,
       "name": "f_211",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32,i32)->()",
       "body_bytes": 783,
       "callers": 2,
       "callees": 40,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (3)"
     },
     {
       "func_idx": 212,
       "name": "f_212",
-      "role": "unknown",
+      "role": "vtable_dispatch",
       "signature": "()->(i32)",
       "body_bytes": 222,
       "callers": 5,
       "callees": 11,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "call_indirect + 10 direct"
     },
     {
       "func_idx": 213,
       "name": "f_213",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32)->()",
       "body_bytes": 186,
       "callers": 2,
       "callees": 10,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "format! + unreachable (size=186)"
     },
     {
       "func_idx": 214,
       "name": "f_214",
-      "role": "unknown",
+      "role": "vtable_dispatch",
       "signature": "(i32,i32,i32,i32,i32)->(i32)",
       "body_bytes": 110,
       "callers": 3,
       "callees": 4,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "call_indirect + 2 direct"
     },
     {
       "func_idx": 215,
       "name": "f_215",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32)->(i32)",
       "body_bytes": 349,
       "callers": 2,
       "callees": 19,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 216,
       "name": "f_216",
-      "role": "unknown",
+      "role": "panic_unwrap",
       "signature": "(i32,i32)->()",
       "body_bytes": 108,
       "callers": 449,
       "callees": 2,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "unreachable, calls=2"
     },
     {
       "func_idx": 217,
       "name": "f_217",
-      "role": "unknown",
+      "role": "panic_unwrap",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 141,
       "callers": 1,
       "callees": 4,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "unreachable, calls=4"
     },
     {
       "func_idx": 218,
       "name": "f_218",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32)->()",
       "body_bytes": 870,
       "callers": 8,
       "callees": 21,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "large panic helper (size=870)"
     },
     {
       "func_idx": 219,
       "name": "f_219",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32,i32)->()",
       "body_bytes": 165,
       "callers": 3,
       "callees": 10,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (3)"
     },
     {
       "func_idx": 220,
       "name": "f_220",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32)->()",
       "body_bytes": 564,
       "callers": 2,
       "callees": 24,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "large panic helper (size=564)"
     },
     {
       "func_idx": 221,
       "name": "f_221",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->()",
       "body_bytes": 96,
       "callers": 0,
       "callees": 4,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 222,
       "name": "f_222",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32)->()",
       "body_bytes": 1091,
       "callers": 3,
       "callees": 54,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "large panic helper (size=1091)"
     },
     {
       "func_idx": 223,
       "name": "f_223",
-      "role": "unknown",
+      "role": "vtable_dispatch",
       "signature": "(i32,i32,i32,i32)->()",
       "body_bytes": 854,
       "callers": 46,
       "callees": 31,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "call_indirect + 30 direct"
     },
     {
       "func_idx": 224,
       "name": "f_224",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32)->()",
       "body_bytes": 398,
       "callers": 3,
       "callees": 15,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "format! + unreachable (size=398)"
     },
     {
       "func_idx": 225,
       "name": "f_225",
-      "role": "unknown",
+      "role": "panic_unwrap",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 64,
       "callers": 0,
       "callees": 3,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "unreachable, calls=3"
     },
     {
       "func_idx": 226,
@@ -2743,122 +2808,132 @@
     {
       "func_idx": 227,
       "name": "f_227",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32,i32)->()",
       "body_bytes": 161,
       "callers": 9,
       "callees": 7,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "format! + unreachable (size=161)"
     },
     {
       "func_idx": 228,
       "name": "f_228",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->()",
       "body_bytes": 673,
       "callers": 3,
       "callees": 25,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (2)"
     },
     {
       "func_idx": 229,
       "name": "f_229",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32)->()",
       "body_bytes": 1103,
       "callers": 4,
       "callees": 45,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 230,
       "name": "f_230",
-      "role": "unknown",
+      "role": "loop_iter",
       "signature": "(i32,i32,i32)->(i32)",
       "body_bytes": 114,
       "callers": 0,
       "callees": 7,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "loop-based iter/parser (size=114)"
     },
     {
       "func_idx": 231,
       "name": "f_231",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32)->()",
       "body_bytes": 146,
       "callers": 33,
       "callees": 9,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "format! + unreachable (size=146)"
     },
     {
       "func_idx": 232,
       "name": "f_232",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32,i32,i32,i32,i32)->()",
       "body_bytes": 304,
       "callers": 2,
       "callees": 6,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "format! + unreachable (size=304)"
     },
     {
       "func_idx": 233,
       "name": "f_233",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32)->(i64)",
       "body_bytes": 73,
       "callers": 0,
       "callees": 6,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (2)"
     },
     {
       "func_idx": 234,
       "name": "f_234",
-      "role": "unknown",
+      "role": "accessor",
       "signature": "(i32,i32,i32)->()",
       "body_bytes": 1,
       "callers": 0,
       "callees": 0,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "trivial accessor (size=1)"
     },
     {
       "func_idx": 235,
       "name": "f_235",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32)->()",
       "body_bytes": 1132,
       "callers": 13,
       "callees": 57,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "large panic helper (size=1132)"
     },
     {
       "func_idx": 236,
       "name": "f_236",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->()",
       "body_bytes": 2600,
       "callers": 2,
       "callees": 122,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 237,
@@ -2875,14 +2950,15 @@
     {
       "func_idx": 238,
       "name": "f_238",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32)->()",
       "body_bytes": 1404,
       "callers": 2,
       "callees": 74,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 239,
@@ -2899,158 +2975,171 @@
     {
       "func_idx": 240,
       "name": "f_240",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i64,i32)->(i32)",
       "body_bytes": 761,
       "callers": 7,
       "callees": 23,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "large panic helper (size=761)"
     },
     {
       "func_idx": 241,
       "name": "kc",
-      "role": "unknown",
+      "role": "panic_unwrap",
       "signature": "(i32,i32,i32,i32)->(i32)",
       "body_bytes": 79,
       "callers": 0,
       "callees": 1,
       "is_exported": true,
       "export_name": "kc",
-      "is_import": false
+      "is_import": false,
+      "role_note": "unreachable, calls=1"
     },
     {
       "func_idx": 242,
       "name": "f_242",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32)->()",
       "body_bytes": 841,
       "callers": 2,
       "callees": 74,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 243,
       "name": "f_243",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32)->()",
       "body_bytes": 129,
       "callers": 29,
       "callees": 7,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "format! + unreachable (size=129)"
     },
     {
       "func_idx": 244,
       "name": "f_244",
-      "role": "unknown",
+      "role": "byte_serializer",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 337,
       "callers": 11,
       "callees": 0,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "byte serializer (loads=10 stores=0)"
     },
     {
       "func_idx": 245,
       "name": "dc",
-      "role": "unknown",
+      "role": "vtable_dispatch",
       "signature": "(i32,i32)->()",
       "body_bytes": 118,
       "callers": 0,
       "callees": 5,
       "is_exported": true,
       "export_name": "dc",
-      "is_import": false
+      "is_import": false,
+      "role_note": "call_indirect + 4 direct"
     },
     {
       "func_idx": 246,
       "name": "f_246",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 1233,
       "callers": 2,
       "callees": 52,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "large panic helper (size=1233)"
     },
     {
       "func_idx": 247,
       "name": "f_247",
-      "role": "unknown",
+      "role": "drop_glue",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 57,
       "callers": 1,
       "callees": 3,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "small drop helper (calls=3)"
     },
     {
       "func_idx": 248,
       "name": "f_248",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32,i32,i32)->()",
       "body_bytes": 486,
       "callers": 4,
       "callees": 6,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "large panic helper (size=486)"
     },
     {
       "func_idx": 249,
       "name": "f_249",
-      "role": "unknown",
+      "role": "vtable_dispatch",
       "signature": "(i32,i32,i32)->()",
       "body_bytes": 997,
       "callers": 1,
       "callees": 60,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "call_indirect + 59 direct"
     },
     {
       "func_idx": 250,
       "name": "f_250",
-      "role": "unknown",
+      "role": "vtable_dispatch",
       "signature": "(i32,i32,i32)->()",
       "body_bytes": 736,
       "callers": 1,
       "callees": 45,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "call_indirect + 42 direct"
     },
     {
       "func_idx": 251,
       "name": "f_251",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32,i32,i32,i32)->()",
       "body_bytes": 2363,
       "callers": 3,
       "callees": 47,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 252,
       "name": "f_252",
-      "role": "unknown",
+      "role": "vtable_dispatch",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 125,
       "callers": 0,
       "callees": 9,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "call_indirect + 7 direct"
     },
     {
       "func_idx": 253,
@@ -3067,74 +3156,80 @@
     {
       "func_idx": 254,
       "name": "f_254",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32)->()",
       "body_bytes": 125,
       "callers": 15,
       "callees": 7,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "format! + unreachable (size=125)"
     },
     {
       "func_idx": 255,
       "name": "f_255",
-      "role": "unknown",
+      "role": "drop_glue",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 20,
       "callers": 0,
       "callees": 3,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "small drop helper (calls=3)"
     },
     {
       "func_idx": 256,
       "name": "f_256",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->()",
       "body_bytes": 500,
       "callers": 5,
       "callees": 23,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (3)"
     },
     {
       "func_idx": 257,
       "name": "f_257",
-      "role": "unknown",
+      "role": "runtime_string_io",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 336,
       "callers": 137,
       "callees": 0,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "shared byte/string runtime helper (called everywhere)"
     },
     {
       "func_idx": 258,
       "name": "f_258",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32)->()",
       "body_bytes": 1852,
       "callers": 6,
       "callees": 49,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "large panic helper (size=1852)"
     },
     {
       "func_idx": 259,
       "name": "f_259",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32,i32)->()",
       "body_bytes": 161,
       "callers": 0,
       "callees": 9,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "format! + unreachable (size=161)"
     },
     {
       "func_idx": 260,
@@ -3163,14 +3258,15 @@
     {
       "func_idx": 262,
       "name": "f_262",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 449,
       "callers": 0,
       "callees": 16,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "large panic helper (size=449)"
     },
     {
       "func_idx": 263,
@@ -3187,62 +3283,67 @@
     {
       "func_idx": 264,
       "name": "f_264",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32)->(i32)",
       "body_bytes": 129,
       "callers": 11,
       "callees": 5,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 265,
       "name": "f_265",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 252,
       "callers": 0,
       "callees": 18,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (3)"
     },
     {
       "func_idx": 266,
       "name": "f_266",
-      "role": "unknown",
+      "role": "vtable_dispatch",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 579,
       "callers": 0,
       "callees": 32,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "call_indirect + 29 direct"
     },
     {
       "func_idx": 267,
       "name": "f_267",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "()->(i32)",
       "body_bytes": 925,
       "callers": 6,
       "callees": 48,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 268,
       "name": "f_268",
-      "role": "unknown",
+      "role": "vtable_dispatch",
       "signature": "(i32,i32,i32)->(i32)",
       "body_bytes": 1051,
       "callers": 20,
       "callees": 49,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "call_indirect + 44 direct"
     },
     {
       "func_idx": 269,
@@ -3259,14 +3360,15 @@
     {
       "func_idx": 270,
       "name": "f_270",
-      "role": "unknown",
+      "role": "hash_round",
       "signature": "(i64,i64,i32)->(i64)",
       "body_bytes": 694,
       "callers": 9,
       "callees": 19,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "rot=23 xor=24"
     },
     {
       "func_idx": 271,
@@ -3283,98 +3385,106 @@
     {
       "func_idx": 272,
       "name": "f_272",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32)->()",
       "body_bytes": 132,
       "callers": 10,
       "callees": 7,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "format! + unreachable (size=132)"
     },
     {
       "func_idx": 273,
       "name": "f_273",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 299,
       "callers": 4,
       "callees": 5,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "format! + unreachable (size=299)"
     },
     {
       "func_idx": 274,
       "name": "f_274",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32)->()",
       "body_bytes": 540,
       "callers": 2,
       "callees": 21,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 275,
       "name": "f_275",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32,i32)->()",
       "body_bytes": 193,
       "callers": 7,
       "callees": 9,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "format! + unreachable (size=193)"
     },
     {
       "func_idx": 276,
       "name": "f_276",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->()",
       "body_bytes": 512,
       "callers": 13,
       "callees": 27,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 277,
       "name": "f_277",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32,i32)->(i32)",
       "body_bytes": 447,
       "callers": 3,
       "callees": 23,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 278,
       "name": "f_278",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32)->(i32)",
       "body_bytes": 124,
       "callers": 84,
       "callees": 7,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 279,
       "name": "f_279",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32)->()",
       "body_bytes": 317,
       "callers": 2,
       "callees": 17,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "format! + unreachable (size=317)"
     },
     {
       "func_idx": 280,
@@ -3415,14 +3525,15 @@
     {
       "func_idx": 283,
       "name": "f_283",
-      "role": "unknown",
+      "role": "vtable_dispatch",
       "signature": "(i32,i32,i32)->(i32)",
       "body_bytes": 4702,
       "callers": 2,
       "callees": 104,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "call_indirect + 98 direct"
     },
     {
       "func_idx": 284,
@@ -3439,86 +3550,93 @@
     {
       "func_idx": 285,
       "name": "f_285",
-      "role": "unknown",
+      "role": "format_helper",
       "signature": "(i32)->(i32)",
       "body_bytes": 454,
       "callers": 2,
       "callees": 10,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "medium format helper (size=454, calls=10)"
     },
     {
       "func_idx": 286,
       "name": "f_286",
-      "role": "unknown",
+      "role": "drop_glue",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 20,
       "callers": 0,
       "callees": 3,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "small drop helper (calls=3)"
     },
     {
       "func_idx": 287,
       "name": "f_287",
-      "role": "unknown",
+      "role": "vtable_dispatch",
       "signature": "(i32)->()",
       "body_bytes": 323,
       "callers": 7,
       "callees": 18,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "call_indirect + 17 direct"
     },
     {
       "func_idx": 288,
       "name": "f_288",
-      "role": "unknown",
+      "role": "vtable_dispatch",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 52,
       "callers": 0,
       "callees": 7,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "call_indirect + 6 direct"
     },
     {
       "func_idx": 289,
       "name": "f_289",
-      "role": "unknown",
+      "role": "drop_glue",
       "signature": "(i32)->()",
       "body_bytes": 24,
       "callers": 0,
       "callees": 3,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "small drop helper (calls=3)"
     },
     {
       "func_idx": 290,
       "name": "f_290",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32,i32,i32)->()",
       "body_bytes": 241,
       "callers": 2,
       "callees": 6,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "format! + unreachable (size=241)"
     },
     {
       "func_idx": 291,
       "name": "f_291",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32)->()",
       "body_bytes": 905,
       "callers": 5,
       "callees": 51,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "large panic helper (size=905)"
     },
     {
       "func_idx": 292,
@@ -3547,38 +3665,41 @@
     {
       "func_idx": 294,
       "name": "f_294",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32)->(i64)",
       "body_bytes": 73,
       "callers": 0,
       "callees": 6,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (2)"
     },
     {
       "func_idx": 295,
       "name": "f_295",
-      "role": "unknown",
+      "role": "hash_round",
       "signature": "(i32,i32)->()",
       "body_bytes": 10100,
       "callers": 9,
       "callees": 197,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "rot=256 xor=128"
     },
     {
       "func_idx": 296,
       "name": "f_296",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 209,
       "callers": 0,
       "callees": 10,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (3)"
     },
     {
       "func_idx": 297,
@@ -3595,38 +3716,41 @@
     {
       "func_idx": 298,
       "name": "f_298",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32)->()",
       "body_bytes": 100,
       "callers": 48,
       "callees": 8,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (3)"
     },
     {
       "func_idx": 299,
       "name": "f_299",
-      "role": "unknown",
+      "role": "loop_iter",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 141,
       "callers": 1,
       "callees": 4,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "loop-based iter/parser (size=141)"
     },
     {
       "func_idx": 300,
       "name": "f_300",
-      "role": "unknown",
+      "role": "thunk",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 13,
       "callers": 0,
       "callees": 1,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "forwards to f_268"
     },
     {
       "func_idx": 301,
@@ -3655,14 +3779,15 @@
     {
       "func_idx": 303,
       "name": "f_303",
-      "role": "unknown",
+      "role": "vtable_dispatch",
       "signature": "(i32)->()",
       "body_bytes": 629,
       "callers": 0,
       "callees": 40,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "call_indirect + 39 direct"
     },
     {
       "func_idx": 304,
@@ -3679,50 +3804,54 @@
     {
       "func_idx": 305,
       "name": "f_305",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "()->()",
       "body_bytes": 448,
       "callers": 6,
       "callees": 15,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 306,
       "name": "f_306",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32)->()",
       "body_bytes": 560,
       "callers": 3,
       "callees": 30,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "large panic helper (size=560)"
     },
     {
       "func_idx": 307,
       "name": "f_307",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32)->()",
       "body_bytes": 343,
       "callers": 0,
       "callees": 20,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (3)"
     },
     {
       "func_idx": 308,
       "name": "f_308",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->()",
       "body_bytes": 253,
       "callers": 2,
       "callees": 12,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 309,
@@ -3739,266 +3868,288 @@
     {
       "func_idx": 310,
       "name": "f_310",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32,i32)->()",
       "body_bytes": 702,
       "callers": 5,
       "callees": 21,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 311,
       "name": "f_311",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32)->()",
       "body_bytes": 751,
       "callers": 8,
       "callees": 39,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "large panic helper (size=751)"
     },
     {
       "func_idx": 312,
       "name": "f_312",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32,i32,i32)->(i32)",
       "body_bytes": 1233,
       "callers": 9,
       "callees": 43,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "large panic helper (size=1233)"
     },
     {
       "func_idx": 313,
       "name": "f_313",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->()",
       "body_bytes": 687,
       "callers": 4,
       "callees": 41,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 314,
       "name": "f_314",
-      "role": "unknown",
+      "role": "format_helper",
       "signature": "(i32)->()",
       "body_bytes": 569,
       "callers": 14,
       "callees": 18,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "medium format helper (size=569, calls=18)"
     },
     {
       "func_idx": 315,
       "name": "f_315",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32)->()",
       "body_bytes": 495,
       "callers": 4,
       "callees": 18,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "large panic helper (size=495)"
     },
     {
       "func_idx": 316,
       "name": "f_316",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32,i32)->()",
       "body_bytes": 1083,
       "callers": 5,
       "callees": 15,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "large panic helper (size=1083)"
     },
     {
       "func_idx": 317,
       "name": "f_317",
-      "role": "unknown",
+      "role": "drop_glue",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 20,
       "callers": 0,
       "callees": 3,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "small drop helper (calls=3)"
     },
     {
       "func_idx": 318,
       "name": "f_318",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32)->()",
       "body_bytes": 2580,
       "callers": 8,
       "callees": 82,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 319,
       "name": "f_319",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 434,
       "callers": 0,
       "callees": 22,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (3)"
     },
     {
       "func_idx": 320,
       "name": "f_320",
-      "role": "unknown",
+      "role": "vtable_dispatch",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 25,
       "callers": 0,
       "callees": 4,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "call_indirect + 3 direct"
     },
     {
       "func_idx": 321,
       "name": "f_321",
-      "role": "unknown",
+      "role": "loop_iter",
       "signature": "(i32)->(i32)",
       "body_bytes": 173,
       "callers": 2,
       "callees": 10,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "loop-based iter/parser (size=173)"
     },
     {
       "func_idx": 322,
       "name": "f_322",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->()",
       "body_bytes": 6054,
       "callers": 4,
       "callees": 276,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 323,
       "name": "f_323",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32,i32)->(i32)",
       "body_bytes": 830,
       "callers": 19,
       "callees": 44,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "large panic helper (size=830)"
     },
     {
       "func_idx": 324,
       "name": "f_324",
-      "role": "unknown",
+      "role": "loop_iter",
       "signature": "(i32,i32,i32)->()",
       "body_bytes": 122,
       "callers": 0,
       "callees": 7,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "loop-based iter/parser (size=122)"
     },
     {
       "func_idx": 325,
       "name": "f_325",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32,i64)->()",
       "body_bytes": 1415,
       "callers": 2,
       "callees": 52,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 326,
       "name": "f_326",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 122,
       "callers": 18,
       "callees": 6,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "format! + unreachable (size=122)"
     },
     {
       "func_idx": 327,
       "name": "f_327",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32,i32,i32,i32,i32,i32)->(i32)",
       "body_bytes": 811,
       "callers": 7,
       "callees": 40,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 328,
       "name": "f_328",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32,i32)->()",
       "body_bytes": 150,
       "callers": 0,
       "callees": 8,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "format! + unreachable (size=150)"
     },
     {
       "func_idx": 329,
       "name": "f_329",
-      "role": "unknown",
+      "role": "vtable_dispatch",
       "signature": "()->(i32)",
       "body_bytes": 1084,
       "callers": 0,
       "callees": 42,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "call_indirect + 38 direct"
     },
     {
       "func_idx": 330,
       "name": "f_330",
-      "role": "unknown",
+      "role": "thunk",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 13,
       "callers": 0,
       "callees": 1,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "forwards to f_297"
     },
     {
       "func_idx": 331,
       "name": "f_331",
-      "role": "unknown",
+      "role": "vtable_dispatch",
       "signature": "(i32,i32,i32,i32,i32)->()",
       "body_bytes": 602,
       "callers": 4,
       "callees": 40,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "call_indirect + 33 direct"
     },
     {
       "func_idx": 332,
@@ -4015,110 +4166,119 @@
     {
       "func_idx": 333,
       "name": "f_333",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32,i32)->(i32)",
       "body_bytes": 821,
       "callers": 3,
       "callees": 36,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "large panic helper (size=821)"
     },
     {
       "func_idx": 334,
       "name": "f_334",
-      "role": "unknown",
+      "role": "drop_glue",
       "signature": "(i32)->()",
       "body_bytes": 24,
       "callers": 0,
       "callees": 3,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "small drop helper (calls=3)"
     },
     {
       "func_idx": 335,
       "name": "f_335",
-      "role": "unknown",
+      "role": "thunk",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 13,
       "callers": 0,
       "callees": 1,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "forwards to f_297"
     },
     {
       "func_idx": 336,
       "name": "f_336",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->()",
       "body_bytes": 753,
       "callers": 2,
       "callees": 21,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 337,
       "name": "f_337",
-      "role": "unknown",
+      "role": "utility",
       "signature": "(i32,i32,i32)->()",
       "body_bytes": 190,
       "callers": 160,
       "callees": 2,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "size=190 calls=2 blocks=0"
     },
     {
       "func_idx": 338,
       "name": "f_338",
-      "role": "unknown",
+      "role": "vtable_dispatch",
       "signature": "(i32)->()",
       "body_bytes": 242,
       "callers": 5,
       "callees": 15,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "call_indirect + 13 direct"
     },
     {
       "func_idx": 339,
       "name": "qc",
-      "role": "unknown",
+      "role": "vtable_dispatch",
       "signature": "(i32,i32,i32,i32)->()",
       "body_bytes": 61,
       "callers": 0,
       "callees": 3,
       "is_exported": true,
       "export_name": "qc",
-      "is_import": false
+      "is_import": false,
+      "role_note": "call_indirect + 2 direct"
     },
     {
       "func_idx": 340,
       "name": "f_340",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32,i32)->(i32)",
       "body_bytes": 112,
       "callers": 0,
       "callees": 7,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "format! + unreachable (size=112)"
     },
     {
       "func_idx": 341,
       "name": "f_341",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32,i32)->(i32)",
       "body_bytes": 1430,
       "callers": 183,
       "callees": 56,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "large panic helper (size=1430)"
     },
     {
       "func_idx": 342,
@@ -4135,26 +4295,28 @@
     {
       "func_idx": 343,
       "name": "f_343",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->()",
       "body_bytes": 96,
       "callers": 0,
       "callees": 4,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 344,
       "name": "f_344",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 209,
       "callers": 0,
       "callees": 10,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (3)"
     },
     {
       "func_idx": 345,
@@ -4171,74 +4333,80 @@
     {
       "func_idx": 346,
       "name": "f_346",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32,i64,i32)->()",
       "body_bytes": 598,
       "callers": 2,
       "callees": 17,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 347,
       "name": "f_347",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32)->()",
       "body_bytes": 1255,
       "callers": 2,
       "callees": 56,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "large panic helper (size=1255)"
     },
     {
       "func_idx": 348,
       "name": "f_348",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->()",
       "body_bytes": 814,
       "callers": 2,
       "callees": 38,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 349,
       "name": "f_349",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32)->()",
       "body_bytes": 570,
       "callers": 3,
       "callees": 24,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 350,
       "name": "f_350",
-      "role": "unknown",
+      "role": "vtable_dispatch",
       "signature": "(i32,i32,i32,i32)->()",
       "body_bytes": 121,
       "callers": 0,
       "callees": 7,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "call_indirect + 6 direct"
     },
     {
       "func_idx": 351,
       "name": "f_351",
-      "role": "unknown",
+      "role": "thunk",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 13,
       "callers": 0,
       "callees": 1,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "forwards to f_297"
     },
     {
       "func_idx": 352,
@@ -4267,134 +4435,145 @@
     {
       "func_idx": 354,
       "name": "f_354",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 865,
       "callers": 4,
       "callees": 28,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 355,
       "name": "f_355",
-      "role": "unknown",
+      "role": "runtime_string_io",
       "signature": "(i32,i32,i32)->()",
       "body_bytes": 89,
       "callers": 1815,
       "callees": 2,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "shared byte/string runtime helper (called everywhere)"
     },
     {
       "func_idx": 356,
       "name": "f_356",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->()",
       "body_bytes": 1961,
       "callers": 7,
       "callees": 87,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 357,
       "name": "f_357",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32,i32)->(i32)",
       "body_bytes": 393,
       "callers": 3,
       "callees": 17,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "format! + unreachable (size=393)"
     },
     {
       "func_idx": 358,
       "name": "f_358",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32)->()",
       "body_bytes": 611,
       "callers": 2,
       "callees": 16,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "large panic helper (size=611)"
     },
     {
       "func_idx": 359,
       "name": "f_359",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32)->(i32)",
       "body_bytes": 889,
       "callers": 17,
       "callees": 48,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 360,
       "name": "f_360",
-      "role": "unknown",
+      "role": "utility",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 65,
       "callers": 11,
       "callees": 7,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "size=65 calls=7 blocks=0"
     },
     {
       "func_idx": 361,
       "name": "f_361",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->()",
       "body_bytes": 192,
       "callers": 3,
       "callees": 9,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 362,
       "name": "f_362",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->()",
       "body_bytes": 513,
       "callers": 2,
       "callees": 22,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (3)"
     },
     {
       "func_idx": 363,
       "name": "f_363",
-      "role": "unknown",
+      "role": "utility",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 80,
       "callers": 2,
       "callees": 7,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "size=80 calls=7 blocks=0"
     },
     {
       "func_idx": 364,
       "name": "f_364",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32)->()",
       "body_bytes": 601,
       "callers": 6,
       "callees": 31,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 365,
@@ -4411,146 +4590,158 @@
     {
       "func_idx": 366,
       "name": "f_366",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32)->()",
       "body_bytes": 1457,
       "callers": 3,
       "callees": 16,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (3)"
     },
     {
       "func_idx": 367,
       "name": "f_367",
-      "role": "unknown",
+      "role": "utility",
       "signature": "(i32,i32)->()",
       "body_bytes": 31,
       "callers": 5,
       "callees": 4,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "size=31 calls=4 blocks=0"
     },
     {
       "func_idx": 368,
       "name": "f_368",
-      "role": "unknown",
+      "role": "vtable_dispatch",
       "signature": "(i32,i32,i32)->(i32)",
       "body_bytes": 977,
       "callers": 2,
       "callees": 16,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "call_indirect + 14 direct"
     },
     {
       "func_idx": 369,
       "name": "f_369",
-      "role": "unknown",
+      "role": "panic_unwrap",
       "signature": "(i32)->()",
       "body_bytes": 77,
       "callers": 0,
       "callees": 4,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "unreachable, calls=4"
     },
     {
       "func_idx": 370,
       "name": "f_370",
-      "role": "unknown",
+      "role": "panic_unwrap",
       "signature": "(i32)->()",
       "body_bytes": 90,
       "callers": 0,
       "callees": 4,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "unreachable, calls=4"
     },
     {
       "func_idx": 371,
       "name": "f_371",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32)->()",
       "body_bytes": 487,
       "callers": 16,
       "callees": 24,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (3)"
     },
     {
       "func_idx": 372,
       "name": "f_372",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32)->(i32)",
       "body_bytes": 666,
       "callers": 2,
       "callees": 21,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "large panic helper (size=666)"
     },
     {
       "func_idx": 373,
       "name": "f_373",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 445,
       "callers": 0,
       "callees": 16,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "large panic helper (size=445)"
     },
     {
       "func_idx": 374,
       "name": "f_374",
-      "role": "unknown",
+      "role": "panic_unwrap",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 139,
       "callers": 1,
       "callees": 4,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "unreachable, calls=4"
     },
     {
       "func_idx": 375,
       "name": "f_375",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32)->(i32)",
       "body_bytes": 450,
       "callers": 2,
       "callees": 20,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 376,
       "name": "f_376",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32,i32)->(i32)",
       "body_bytes": 365,
       "callers": 2,
       "callees": 20,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 377,
       "name": "f_377",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->()",
       "body_bytes": 1102,
       "callers": 2,
       "callees": 50,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 378,
@@ -4579,62 +4770,67 @@
     {
       "func_idx": 380,
       "name": "f_380",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32)->(i64)",
       "body_bytes": 73,
       "callers": 0,
       "callees": 6,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (2)"
     },
     {
       "func_idx": 381,
       "name": "f_381",
-      "role": "unknown",
+      "role": "drop_glue",
       "signature": "(i32)->()",
       "body_bytes": 25,
       "callers": 0,
       "callees": 3,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "small drop helper (calls=3)"
     },
     {
       "func_idx": 382,
       "name": "f_382",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32,i32,i32)->()",
       "body_bytes": 946,
       "callers": 8,
       "callees": 14,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "large panic helper (size=946)"
     },
     {
       "func_idx": 383,
       "name": "f_383",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32)->()",
       "body_bytes": 94,
       "callers": 0,
       "callees": 3,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (2)"
     },
     {
       "func_idx": 384,
       "name": "f_384",
-      "role": "unknown",
+      "role": "drop_glue",
       "signature": "(i32)->(i32)",
       "body_bytes": 37,
       "callers": 2,
       "callees": 2,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "small drop helper (calls=2)"
     },
     {
       "func_idx": 385,
@@ -4651,122 +4847,132 @@
     {
       "func_idx": 386,
       "name": "f_386",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32)->()",
       "body_bytes": 1137,
       "callers": 4,
       "callees": 57,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "large panic helper (size=1137)"
     },
     {
       "func_idx": 387,
       "name": "f_387",
-      "role": "unknown",
+      "role": "thunk",
       "signature": "(i32,i32)->()",
       "body_bytes": 10,
       "callers": 0,
       "callees": 1,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "forwards to f_444"
     },
     {
       "func_idx": 388,
       "name": "f_388",
-      "role": "unknown",
+      "role": "thunk",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 13,
       "callers": 0,
       "callees": 1,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "forwards to f_297"
     },
     {
       "func_idx": 389,
       "name": "f_389",
-      "role": "unknown",
+      "role": "vtable_dispatch",
       "signature": "(i32,i32,i32,i32)->()",
       "body_bytes": 136,
       "callers": 0,
       "callees": 9,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "call_indirect + 8 direct"
     },
     {
       "func_idx": 390,
       "name": "f_390",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32)->()",
       "body_bytes": 445,
       "callers": 6,
       "callees": 27,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "large panic helper (size=445)"
     },
     {
       "func_idx": 391,
       "name": "f_391",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32)->(i32)",
       "body_bytes": 425,
       "callers": 2,
       "callees": 9,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "large panic helper (size=425)"
     },
     {
       "func_idx": 392,
       "name": "f_392",
-      "role": "unknown",
+      "role": "hash_round",
       "signature": "(i64,i64,i32)->(i64)",
       "body_bytes": 694,
       "callers": 3,
       "callees": 19,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "rot=23 xor=24"
     },
     {
       "func_idx": 393,
       "name": "f_393",
-      "role": "unknown",
+      "role": "panic_unwrap",
       "signature": "(f64)->(f64)",
       "body_bytes": 132,
       "callers": 26,
       "callees": 0,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "unreachable, calls=0"
     },
     {
       "func_idx": 394,
       "name": "f_394",
-      "role": "unknown",
+      "role": "panic_unwrap",
       "signature": "(i32)->()",
       "body_bytes": 122,
       "callers": 2,
       "callees": 4,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "unreachable, calls=4"
     },
     {
       "func_idx": 395,
       "name": "f_395",
-      "role": "unknown",
+      "role": "format_helper",
       "signature": "(i32,i32)->()",
       "body_bytes": 661,
       "callers": 6,
       "callees": 31,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "medium format helper (size=661, calls=31)"
     },
     {
       "func_idx": 396,
@@ -4783,14 +4989,15 @@
     {
       "func_idx": 397,
       "name": "f_397",
-      "role": "unknown",
+      "role": "drop_glue",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 20,
       "callers": 0,
       "callees": 3,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "small drop helper (calls=3)"
     },
     {
       "func_idx": 398,
@@ -4819,14 +5026,15 @@
     {
       "func_idx": 400,
       "name": "f_400",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32,i32)->()",
       "body_bytes": 165,
       "callers": 0,
       "callees": 9,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "format! + unreachable (size=165)"
     },
     {
       "func_idx": 401,
@@ -4843,14 +5051,15 @@
     {
       "func_idx": 402,
       "name": "f_402",
-      "role": "unknown",
+      "role": "loop_iter",
       "signature": "(i32)->()",
       "body_bytes": 61,
       "callers": 0,
       "callees": 3,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "loop-based iter/parser (size=61)"
     },
     {
       "func_idx": 403,
@@ -4867,122 +5076,132 @@
     {
       "func_idx": 404,
       "name": "f_404",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 87,
       "callers": 0,
       "callees": 3,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (2)"
     },
     {
       "func_idx": 405,
       "name": "f_405",
-      "role": "unknown",
+      "role": "thunk",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 13,
       "callers": 0,
       "callees": 1,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "forwards to f_297"
     },
     {
       "func_idx": 406,
       "name": "f_406",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->()",
       "body_bytes": 507,
       "callers": 2,
       "callees": 17,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (3)"
     },
     {
       "func_idx": 407,
       "name": "f_407",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32)->(i32)",
       "body_bytes": 876,
       "callers": 2,
       "callees": 29,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "large panic helper (size=876)"
     },
     {
       "func_idx": 408,
       "name": "f_408",
-      "role": "unknown",
+      "role": "thunk",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 13,
       "callers": 0,
       "callees": 1,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "forwards to f_297"
     },
     {
       "func_idx": 409,
       "name": "f_409",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32)->()",
       "body_bytes": 1835,
       "callers": 2,
       "callees": 82,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (2)"
     },
     {
       "func_idx": 410,
       "name": "f_410",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32)->(i32)",
       "body_bytes": 170,
       "callers": 6,
       "callees": 9,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (3)"
     },
     {
       "func_idx": 411,
       "name": "f_411",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->()",
       "body_bytes": 163,
       "callers": 8,
       "callees": 6,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 412,
       "name": "f_412",
-      "role": "unknown",
+      "role": "vtable_dispatch",
       "signature": "(i32,i32,i32,i32)->()",
       "body_bytes": 1766,
       "callers": 3,
       "callees": 69,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "call_indirect + 68 direct"
     },
     {
       "func_idx": 413,
       "name": "f_413",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32)->()",
       "body_bytes": 2726,
       "callers": 5,
       "callees": 102,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (2)"
     },
     {
       "func_idx": 414,
@@ -4999,14 +5218,15 @@
     {
       "func_idx": 415,
       "name": "f_415",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32)->()",
       "body_bytes": 460,
       "callers": 3,
       "callees": 24,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "large panic helper (size=460)"
     },
     {
       "func_idx": 416,
@@ -5023,50 +5243,54 @@
     {
       "func_idx": 417,
       "name": "f_417",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32)->()",
       "body_bytes": 555,
       "callers": 15,
       "callees": 30,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "large panic helper (size=555)"
     },
     {
       "func_idx": 418,
       "name": "f_418",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32)->(i32)",
       "body_bytes": 4512,
       "callers": 2,
       "callees": 73,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (2)"
     },
     {
       "func_idx": 419,
       "name": "f_419",
-      "role": "unknown",
+      "role": "drop_glue",
       "signature": "(i32,i32)->()",
       "body_bytes": 22,
       "callers": 0,
       "callees": 2,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "small drop helper (calls=2)"
     },
     {
       "func_idx": 420,
       "name": "f_420",
-      "role": "unknown",
+      "role": "panic_unwrap",
       "signature": "(i32,i32)->()",
       "body_bytes": 85,
       "callers": 0,
       "callees": 4,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "unreachable, calls=4"
     },
     {
       "func_idx": 421,
@@ -5107,14 +5331,15 @@
     {
       "func_idx": 424,
       "name": "f_424",
-      "role": "unknown",
+      "role": "small_helper",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 117,
       "callers": 107,
       "callees": 0,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "small helper (size=117)"
     },
     {
       "func_idx": 425,
@@ -5143,50 +5368,54 @@
     {
       "func_idx": 427,
       "name": "f_427",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32)->()",
       "body_bytes": 983,
       "callers": 6,
       "callees": 40,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "large panic helper (size=983)"
     },
     {
       "func_idx": 428,
       "name": "f_428",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32,i32,i32)->(i32)",
       "body_bytes": 303,
       "callers": 4,
       "callees": 12,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "format! + unreachable (size=303)"
     },
     {
       "func_idx": 429,
       "name": "f_429",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32)->(i32)",
       "body_bytes": 2139,
       "callers": 4,
       "callees": 103,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (2)"
     },
     {
       "func_idx": 430,
       "name": "f_430",
-      "role": "unknown",
+      "role": "thunk",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 13,
       "callers": 0,
       "callees": 1,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "forwards to f_297"
     },
     {
       "func_idx": 431,
@@ -5215,38 +5444,41 @@
     {
       "func_idx": 433,
       "name": "f_433",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32,i32)->(i32)",
       "body_bytes": 702,
       "callers": 39,
       "callees": 19,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "large panic helper (size=702)"
     },
     {
       "func_idx": 434,
       "name": "f_434",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 139,
       "callers": 4,
       "callees": 8,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (3)"
     },
     {
       "func_idx": 435,
       "name": "f_435",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32)->(i32)",
       "body_bytes": 396,
       "callers": 2,
       "callees": 19,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 436,
@@ -5263,170 +5495,184 @@
     {
       "func_idx": 437,
       "name": "f_437",
-      "role": "unknown",
+      "role": "panic_unwrap",
       "signature": "(i32,i32,i32)->()",
       "body_bytes": 53,
       "callers": 5,
       "callees": 2,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "unreachable, calls=2"
     },
     {
       "func_idx": 438,
       "name": "f_438",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->()",
       "body_bytes": 87,
       "callers": 2,
       "callees": 4,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 439,
       "name": "f_439",
-      "role": "unknown",
+      "role": "panic_unwrap",
       "signature": "(i32)->()",
       "body_bytes": 59,
       "callers": 0,
       "callees": 3,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "unreachable, calls=3"
     },
     {
       "func_idx": 440,
       "name": "f_440",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32)->(i32)",
       "body_bytes": 170,
       "callers": 2,
       "callees": 9,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (3)"
     },
     {
       "func_idx": 441,
       "name": "f_441",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32)->(i32)",
       "body_bytes": 186,
       "callers": 2,
       "callees": 10,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (3)"
     },
     {
       "func_idx": 442,
       "name": "f_442",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32)->()",
       "body_bytes": 2869,
       "callers": 6,
       "callees": 135,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 443,
       "name": "f_443",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32)->()",
       "body_bytes": 438,
       "callers": 82,
       "callees": 25,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "large panic helper (size=438)"
     },
     {
       "func_idx": 444,
       "name": "f_444",
-      "role": "unknown",
+      "role": "runtime_string_io",
       "signature": "(i32,i32,i32)->()",
       "body_bytes": 244,
       "callers": 4831,
       "callees": 2,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "shared byte/string runtime helper (called everywhere)"
     },
     {
       "func_idx": 445,
       "name": "f_445",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->()",
       "body_bytes": 658,
       "callers": 43,
       "callees": 19,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 446,
       "name": "f_446",
-      "role": "unknown",
+      "role": "hash_round",
       "signature": "(i32)->(i64)",
       "body_bytes": 1231,
       "callers": 5,
       "callees": 14,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "rot=16 xor=14"
     },
     {
       "func_idx": 447,
       "name": "f_447",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32)->(i32)",
       "body_bytes": 269,
       "callers": 9,
       "callees": 13,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 448,
       "name": "f_448",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->()",
       "body_bytes": 1287,
       "callers": 2,
       "callees": 29,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (3)"
     },
     {
       "func_idx": 449,
       "name": "f_449",
-      "role": "unknown",
+      "role": "runtime_string_io",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 429,
       "callers": 6204,
       "callees": 0,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "shared byte/string runtime helper (called everywhere)"
     },
     {
       "func_idx": 450,
       "name": "ec",
-      "role": "unknown",
+      "role": "vtable_dispatch",
       "signature": "(i32,i32)->()",
       "body_bytes": 116,
       "callers": 0,
       "callees": 5,
       "is_exported": true,
       "export_name": "ec",
-      "is_import": false
+      "is_import": false,
+      "role_note": "call_indirect + 4 direct"
     },
     {
       "func_idx": 451,
@@ -5443,26 +5689,28 @@
     {
       "func_idx": 452,
       "name": "f_452",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32)->(i32)",
       "body_bytes": 1852,
       "callers": 2,
       "callees": 44,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (2)"
     },
     {
       "func_idx": 453,
       "name": "f_453",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->()",
       "body_bytes": 327,
       "callers": 2,
       "callees": 7,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 454,
@@ -5479,26 +5727,28 @@
     {
       "func_idx": 455,
       "name": "f_455",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32)->()",
       "body_bytes": 611,
       "callers": 2,
       "callees": 16,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "large panic helper (size=611)"
     },
     {
       "func_idx": 456,
       "name": "f_456",
-      "role": "unknown",
+      "role": "utility",
       "signature": "(i32,i32,i32)->()",
       "body_bytes": 85,
       "callers": 6,
       "callees": 9,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "size=85 calls=9 blocks=0"
     },
     {
       "func_idx": 457,
@@ -5515,38 +5765,41 @@
     {
       "func_idx": 458,
       "name": "f_458",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->()",
       "body_bytes": 618,
       "callers": 3,
       "callees": 30,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (3)"
     },
     {
       "func_idx": 459,
       "name": "f_459",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32,i32)->(i32)",
       "body_bytes": 346,
       "callers": 2,
       "callees": 24,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "format! + unreachable (size=346)"
     },
     {
       "func_idx": 460,
       "name": "f_460",
-      "role": "unknown",
+      "role": "thunk",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 13,
       "callers": 0,
       "callees": 1,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "forwards to f_297"
     },
     {
       "func_idx": 461,
@@ -5563,14 +5816,15 @@
     {
       "func_idx": 462,
       "name": "f_462",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32,i32)->()",
       "body_bytes": 154,
       "callers": 0,
       "callees": 8,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "format! + unreachable (size=154)"
     },
     {
       "func_idx": 463,
@@ -5587,314 +5841,340 @@
     {
       "func_idx": 464,
       "name": "f_464",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32,i32)->(i32)",
       "body_bytes": 429,
       "callers": 0,
       "callees": 13,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "large panic helper (size=429)"
     },
     {
       "func_idx": 465,
       "name": "f_465",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32)->()",
       "body_bytes": 880,
       "callers": 2,
       "callees": 44,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (3)"
     },
     {
       "func_idx": 466,
       "name": "f_466",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32,i32,i32)->()",
       "body_bytes": 2115,
       "callers": 11,
       "callees": 40,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (3)"
     },
     {
       "func_idx": 467,
       "name": "f_467",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->()",
       "body_bytes": 2067,
       "callers": 4,
       "callees": 174,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 468,
       "name": "f_468",
-      "role": "unknown",
+      "role": "vtable_dispatch",
       "signature": "(i32)->()",
       "body_bytes": 264,
       "callers": 24,
       "callees": 15,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "call_indirect + 14 direct"
     },
     {
       "func_idx": 469,
       "name": "f_469",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 244,
       "callers": 0,
       "callees": 7,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "format! + unreachable (size=244)"
     },
     {
       "func_idx": 470,
       "name": "f_470",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->()",
       "body_bytes": 432,
       "callers": 2,
       "callees": 17,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 471,
       "name": "f_471",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32)->(i32)",
       "body_bytes": 139,
       "callers": 6,
       "callees": 8,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (3)"
     },
     {
       "func_idx": 472,
       "name": "f_472",
-      "role": "unknown",
+      "role": "drop_glue",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 20,
       "callers": 0,
       "callees": 3,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "small drop helper (calls=3)"
     },
     {
       "func_idx": 473,
       "name": "f_473",
-      "role": "unknown",
+      "role": "utility",
       "signature": "(i32,i32)->()",
       "body_bytes": 93,
       "callers": 43,
       "callees": 8,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "size=93 calls=8 blocks=0"
     },
     {
       "func_idx": 474,
       "name": "f_474",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32)->(i32)",
       "body_bytes": 282,
       "callers": 2,
       "callees": 11,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 475,
       "name": "f_475",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i64,i64)->()",
       "body_bytes": 135,
       "callers": 19,
       "callees": 2,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (3)"
     },
     {
       "func_idx": 476,
       "name": "f_476",
-      "role": "unknown",
+      "role": "thunk",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 13,
       "callers": 0,
       "callees": 1,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "forwards to f_297"
     },
     {
       "func_idx": 477,
       "name": "jc",
-      "role": "unknown",
+      "role": "runtime_string_io",
       "signature": "(i32,i32,i32,i32)->(i64)",
       "body_bytes": 624,
       "callers": 1448,
       "callees": 0,
       "is_exported": true,
       "export_name": "jc",
-      "is_import": false
+      "is_import": false,
+      "role_note": "shared byte/string runtime helper (called everywhere)"
     },
     {
       "func_idx": 478,
       "name": "f_478",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32,i32)->(i32)",
       "body_bytes": 289,
       "callers": 5,
       "callees": 16,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 479,
       "name": "f_479",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32,i32)->(i32)",
       "body_bytes": 2286,
       "callers": 2,
       "callees": 96,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 480,
       "name": "f_480",
-      "role": "unknown",
+      "role": "drop_glue",
       "signature": "(i32,i64,i32)->()",
       "body_bytes": 32,
       "callers": 3,
       "callees": 3,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "small drop helper (calls=3)"
     },
     {
       "func_idx": 481,
       "name": "f_481",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32)->()",
       "body_bytes": 1118,
       "callers": 5,
       "callees": 32,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 482,
       "name": "f_482",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->()",
       "body_bytes": 94,
       "callers": 4,
       "callees": 7,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (3)"
     },
     {
       "func_idx": 483,
       "name": "f_483",
-      "role": "unknown",
+      "role": "vtable_dispatch",
       "signature": "(i32,i32,i32)->(i32)",
       "body_bytes": 61,
       "callers": 0,
       "callees": 3,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "call_indirect + 2 direct"
     },
     {
       "func_idx": 484,
       "name": "f_484",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 421,
       "callers": 0,
       "callees": 19,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 485,
       "name": "f_485",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->()",
       "body_bytes": 598,
       "callers": 2,
       "callees": 32,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 486,
       "name": "fc",
-      "role": "unknown",
+      "role": "vtable_dispatch",
       "signature": "(i32,i32,i32,i32)->()",
       "body_bytes": 124,
       "callers": 0,
       "callees": 7,
       "is_exported": true,
       "export_name": "fc",
-      "is_import": false
+      "is_import": false,
+      "role_note": "call_indirect + 6 direct"
     },
     {
       "func_idx": 487,
       "name": "lc",
-      "role": "unknown",
+      "role": "panic_unwrap",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 95,
       "callers": 0,
       "callees": 1,
       "is_exported": true,
       "export_name": "lc",
-      "is_import": false
+      "is_import": false,
+      "role_note": "unreachable, calls=1"
     },
     {
       "func_idx": 488,
       "name": "f_488",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32,i32)->()",
       "body_bytes": 1462,
       "callers": 3,
       "callees": 40,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 489,
       "name": "f_489",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32,i32,i32,i32,i32)->()",
       "body_bytes": 5779,
       "callers": 5,
       "callees": 217,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 490,
@@ -5911,194 +6191,210 @@
     {
       "func_idx": 491,
       "name": "f_491",
-      "role": "unknown",
+      "role": "thunk",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 13,
       "callers": 0,
       "callees": 1,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "forwards to f_297"
     },
     {
       "func_idx": 492,
       "name": "f_492",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->()",
       "body_bytes": 1579,
       "callers": 2,
       "callees": 47,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 493,
       "name": "f_493",
-      "role": "unknown",
+      "role": "format_helper",
       "signature": "(i32)->()",
       "body_bytes": 587,
       "callers": 14,
       "callees": 16,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "medium format helper (size=587, calls=16)"
     },
     {
       "func_idx": 494,
       "name": "f_494",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32,i32)->()",
       "body_bytes": 586,
       "callers": 2,
       "callees": 29,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 495,
       "name": "f_495",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32,i32,i32,i32)->()",
       "body_bytes": 194,
       "callers": 108,
       "callees": 9,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "format! + unreachable (size=194)"
     },
     {
       "func_idx": 496,
       "name": "cc",
-      "role": "unknown",
+      "role": "runtime_string_io",
       "signature": "(i64,i32,i32,i32,i32,i32)->()",
       "body_bytes": 353,
       "callers": 2041,
       "callees": 2,
       "is_exported": true,
       "export_name": "cc",
-      "is_import": false
+      "is_import": false,
+      "role_note": "shared byte/string runtime helper (called everywhere)"
     },
     {
       "func_idx": 497,
       "name": "f_497",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->()",
       "body_bytes": 1351,
       "callers": 8,
       "callees": 61,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (3)"
     },
     {
       "func_idx": 498,
       "name": "f_498",
-      "role": "unknown",
+      "role": "drop_glue",
       "signature": "(i32,i32)->()",
       "body_bytes": 22,
       "callers": 0,
       "callees": 2,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "small drop helper (calls=2)"
     },
     {
       "func_idx": 499,
       "name": "f_499",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32)->()",
       "body_bytes": 424,
       "callers": 2,
       "callees": 24,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "large panic helper (size=424)"
     },
     {
       "func_idx": 500,
       "name": "f_500",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32)->()",
       "body_bytes": 1108,
       "callers": 6,
       "callees": 44,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (2)"
     },
     {
       "func_idx": 501,
       "name": "mc",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32,i32,f64,i32,i32,i32)->(i32)",
       "body_bytes": 218,
       "callers": 0,
       "callees": 11,
       "is_exported": true,
       "export_name": "mc",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 502,
       "name": "f_502",
-      "role": "unknown",
+      "role": "thunk",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 13,
       "callers": 0,
       "callees": 1,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "forwards to f_297"
     },
     {
       "func_idx": 503,
       "name": "f_503",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32,i64,i32)->()",
       "body_bytes": 1228,
       "callers": 2,
       "callees": 41,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 504,
       "name": "f_504",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32)->()",
       "body_bytes": 151,
       "callers": 2,
       "callees": 7,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "format! + unreachable (size=151)"
     },
     {
       "func_idx": 505,
       "name": "f_505",
-      "role": "unknown",
+      "role": "vtable_dispatch",
       "signature": "(i32,i32,i32)->()",
       "body_bytes": 470,
       "callers": 4,
       "callees": 27,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "call_indirect + 26 direct"
     },
     {
       "func_idx": 506,
       "name": "f_506",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32)->(i32)",
       "body_bytes": 192,
       "callers": 6,
       "callees": 10,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (3)"
     },
     {
       "func_idx": 507,
@@ -6115,62 +6411,67 @@
     {
       "func_idx": 508,
       "name": "f_508",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32)->(i32)",
       "body_bytes": 613,
       "callers": 5,
       "callees": 28,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 509,
       "name": "f_509",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->()",
       "body_bytes": 909,
       "callers": 3,
       "callees": 36,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 510,
       "name": "f_510",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 3089,
       "callers": 4,
       "callees": 124,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 511,
       "name": "f_511",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 69,
       "callers": 0,
       "callees": 3,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (2)"
     },
     {
       "func_idx": 512,
       "name": "f_512",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->()",
       "body_bytes": 163,
       "callers": 3,
       "callees": 6,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 513,
@@ -6187,50 +6488,54 @@
     {
       "func_idx": 514,
       "name": "f_514",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32)->()",
       "body_bytes": 177,
       "callers": 2,
       "callees": 5,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "format! + unreachable (size=177)"
     },
     {
       "func_idx": 515,
       "name": "f_515",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32)->()",
       "body_bytes": 174,
       "callers": 4,
       "callees": 9,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "format! + unreachable (size=174)"
     },
     {
       "func_idx": 516,
       "name": "f_516",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32)->()",
       "body_bytes": 335,
       "callers": 2,
       "callees": 12,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "format! + unreachable (size=335)"
     },
     {
       "func_idx": 517,
       "name": "f_517",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32,i32)->()",
       "body_bytes": 210,
       "callers": 3,
       "callees": 4,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "format! + unreachable (size=210)"
     },
     {
       "func_idx": 518,
@@ -6247,26 +6552,28 @@
     {
       "func_idx": 519,
       "name": "f_519",
-      "role": "unknown",
+      "role": "drop_glue",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 21,
       "callers": 2,
       "callees": 3,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "small drop helper (calls=3)"
     },
     {
       "func_idx": 520,
       "name": "f_520",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32)->()",
       "body_bytes": 633,
       "callers": 2,
       "callees": 23,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 521,
@@ -6283,98 +6590,106 @@
     {
       "func_idx": 522,
       "name": "f_522",
-      "role": "unknown",
+      "role": "drop_glue",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 20,
       "callers": 2,
       "callees": 3,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "small drop helper (calls=3)"
     },
     {
       "func_idx": 523,
       "name": "f_523",
-      "role": "unknown",
+      "role": "utility",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 65,
       "callers": 8,
       "callees": 7,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "size=65 calls=7 blocks=0"
     },
     {
       "func_idx": 524,
       "name": "f_524",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32,i64,i32)->()",
       "body_bytes": 1062,
       "callers": 3,
       "callees": 29,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 525,
       "name": "f_525",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->()",
       "body_bytes": 1915,
       "callers": 4,
       "callees": 70,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 526,
       "name": "f_526",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->()",
       "body_bytes": 2221,
       "callers": 2,
       "callees": 61,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 527,
       "name": "f_527",
-      "role": "unknown",
+      "role": "drop_glue",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 78,
       "callers": 1,
       "callees": 3,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "small drop helper (calls=3)"
     },
     {
       "func_idx": 528,
       "name": "f_528",
-      "role": "unknown",
+      "role": "vtable_dispatch",
       "signature": "(i32)->()",
       "body_bytes": 266,
       "callers": 2,
       "callees": 16,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "call_indirect + 15 direct"
     },
     {
       "func_idx": 529,
       "name": "f_529",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 1488,
       "callers": 1,
       "callees": 75,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 530,
@@ -6391,26 +6706,28 @@
     {
       "func_idx": 531,
       "name": "f_531",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32)->()",
       "body_bytes": 1209,
       "callers": 6,
       "callees": 50,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "large panic helper (size=1209)"
     },
     {
       "func_idx": 532,
       "name": "f_532",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 420,
       "callers": 8,
       "callees": 11,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "large panic helper (size=420)"
     },
     {
       "func_idx": 533,
@@ -6427,182 +6744,197 @@
     {
       "func_idx": 534,
       "name": "gc",
-      "role": "unknown",
+      "role": "drop_glue",
       "signature": "(i32)->()",
       "body_bytes": 25,
       "callers": 0,
       "callees": 2,
       "is_exported": true,
       "export_name": "gc",
-      "is_import": false
+      "is_import": false,
+      "role_note": "small drop helper (calls=2)"
     },
     {
       "func_idx": 535,
       "name": "f_535",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 500,
       "callers": 2,
       "callees": 15,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (2)"
     },
     {
       "func_idx": 536,
       "name": "f_536",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32)->()",
       "body_bytes": 151,
       "callers": 44,
       "callees": 9,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "format! + unreachable (size=151)"
     },
     {
       "func_idx": 537,
       "name": "f_537",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 590,
       "callers": 2,
       "callees": 33,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "large panic helper (size=590)"
     },
     {
       "func_idx": 538,
       "name": "f_538",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32,i32,i32,i32,i32)->()",
       "body_bytes": 304,
       "callers": 5,
       "callees": 6,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "format! + unreachable (size=304)"
     },
     {
       "func_idx": 539,
       "name": "f_539",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32)->()",
       "body_bytes": 702,
       "callers": 7,
       "callees": 19,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "large panic helper (size=702)"
     },
     {
       "func_idx": 540,
       "name": "f_540",
-      "role": "unknown",
+      "role": "panic_unwrap",
       "signature": "(i32,i32)->()",
       "body_bytes": 144,
       "callers": 6,
       "callees": 4,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "unreachable, calls=4"
     },
     {
       "func_idx": 541,
       "name": "f_541",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->()",
       "body_bytes": 424,
       "callers": 3,
       "callees": 16,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 542,
       "name": "f_542",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32)->(i32)",
       "body_bytes": 461,
       "callers": 5,
       "callees": 23,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 543,
       "name": "f_543",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->()",
       "body_bytes": 2060,
       "callers": 10,
       "callees": 59,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (2)"
     },
     {
       "func_idx": 544,
       "name": "f_544",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32)->()",
       "body_bytes": 103,
       "callers": 0,
       "callees": 4,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (2)"
     },
     {
       "func_idx": 545,
       "name": "f_545",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32,i32)->(i32)",
       "body_bytes": 2779,
       "callers": 22,
       "callees": 96,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "large panic helper (size=2779)"
     },
     {
       "func_idx": 546,
       "name": "f_546",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32,i32)->()",
       "body_bytes": 198,
       "callers": 0,
       "callees": 11,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (3)"
     },
     {
       "func_idx": 547,
       "name": "f_547",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32)->()",
       "body_bytes": 880,
       "callers": 2,
       "callees": 27,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "large panic helper (size=880)"
     },
     {
       "func_idx": 548,
       "name": "f_548",
-      "role": "unknown",
+      "role": "thunk",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 13,
       "callers": 0,
       "callees": 1,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "forwards to f_297"
     },
     {
       "func_idx": 549,
@@ -6619,134 +6951,145 @@
     {
       "func_idx": 550,
       "name": "f_550",
-      "role": "unknown",
+      "role": "thunk",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 13,
       "callers": 0,
       "callees": 1,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "forwards to f_268"
     },
     {
       "func_idx": 551,
       "name": "f_551",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32)->()",
       "body_bytes": 554,
       "callers": 32,
       "callees": 19,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "large panic helper (size=554)"
     },
     {
       "func_idx": 552,
       "name": "f_552",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32,i32)->()",
       "body_bytes": 436,
       "callers": 3,
       "callees": 23,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 553,
       "name": "f_553",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32,i32,i32)->()",
       "body_bytes": 294,
       "callers": 2,
       "callees": 10,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (3)"
     },
     {
       "func_idx": 554,
       "name": "f_554",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->()",
       "body_bytes": 93,
       "callers": 2,
       "callees": 7,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (3)"
     },
     {
       "func_idx": 555,
       "name": "f_555",
-      "role": "unknown",
+      "role": "utility",
       "signature": "(i32,i32)->()",
       "body_bytes": 74,
       "callers": 3,
       "callees": 7,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "size=74 calls=7 blocks=0"
     },
     {
       "func_idx": 556,
       "name": "f_556",
-      "role": "unknown",
+      "role": "panic_unwrap",
       "signature": "(i32)->()",
       "body_bytes": 73,
       "callers": 0,
       "callees": 4,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "unreachable, calls=4"
     },
     {
       "func_idx": 557,
       "name": "f_557",
-      "role": "unknown",
+      "role": "drop_glue",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 20,
       "callers": 4,
       "callees": 3,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "small drop helper (calls=3)"
     },
     {
       "func_idx": 558,
       "name": "f_558",
-      "role": "unknown",
+      "role": "thunk",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 13,
       "callers": 0,
       "callees": 1,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "forwards to f_297"
     },
     {
       "func_idx": 559,
       "name": "f_559",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 148,
       "callers": 0,
       "callees": 8,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "format! + unreachable (size=148)"
     },
     {
       "func_idx": 560,
       "name": "f_560",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32)->()",
       "body_bytes": 320,
       "callers": 0,
       "callees": 12,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "format! + unreachable (size=320)"
     },
     {
       "func_idx": 561,
@@ -6763,170 +7106,184 @@
     {
       "func_idx": 562,
       "name": "f_562",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32)->(i32)",
       "body_bytes": 1091,
       "callers": 3,
       "callees": 48,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 563,
       "name": "oc",
-      "role": "unknown",
+      "role": "byte_serializer",
       "signature": "(i32,i32,i32,i32)->(i64)",
       "body_bytes": 624,
       "callers": 0,
       "callees": 0,
       "is_exported": true,
       "export_name": "oc",
-      "is_import": false
+      "is_import": false,
+      "role_note": "byte serializer (loads=16 stores=0)"
     },
     {
       "func_idx": 564,
       "name": "f_564",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32,i32)->()",
       "body_bytes": 275,
       "callers": 0,
       "callees": 15,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (3)"
     },
     {
       "func_idx": 565,
       "name": "f_565",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32,i32,i32)->()",
       "body_bytes": 1033,
       "callers": 2,
       "callees": 82,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 566,
       "name": "nc",
-      "role": "unknown",
+      "role": "accessor",
       "signature": "(i32)->(i32)",
       "body_bytes": 10,
       "callers": 0,
       "callees": 0,
       "is_exported": true,
       "export_name": "nc",
-      "is_import": false
+      "is_import": false,
+      "role_note": "trivial accessor (size=10)"
     },
     {
       "func_idx": 567,
       "name": "f_567",
-      "role": "unknown",
+      "role": "utility",
       "signature": "(i32,i32,i32)->()",
       "body_bytes": 85,
       "callers": 4,
       "callees": 9,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "size=85 calls=9 blocks=0"
     },
     {
       "func_idx": 568,
       "name": "f_568",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(f64,i32)->(i32)",
       "body_bytes": 2795,
       "callers": 6,
       "callees": 63,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 569,
       "name": "pc",
-      "role": "unknown",
+      "role": "vtable_dispatch",
       "signature": "(i32,i32,i32,i32,i32)->()",
       "body_bytes": 142,
       "callers": 0,
       "callees": 8,
       "is_exported": true,
       "export_name": "pc",
-      "is_import": false
+      "is_import": false,
+      "role_note": "call_indirect + 7 direct"
     },
     {
       "func_idx": 570,
       "name": "f_570",
-      "role": "unknown",
+      "role": "thunk",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 13,
       "callers": 0,
       "callees": 1,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "forwards to f_268"
     },
     {
       "func_idx": 571,
       "name": "ic",
-      "role": "unknown",
+      "role": "loop_iter",
       "signature": "(i32,i32)->()",
       "body_bytes": 106,
       "callers": 12,
       "callees": 0,
       "is_exported": true,
       "export_name": "ic",
-      "is_import": false
+      "is_import": false,
+      "role_note": "loop-based iter/parser (size=106)"
     },
     {
       "func_idx": 572,
       "name": "f_572",
-      "role": "unknown",
+      "role": "drop_glue",
       "signature": "(i32,i32)->()",
       "body_bytes": 22,
       "callers": 2,
       "callees": 3,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "small drop helper (calls=3)"
     },
     {
       "func_idx": 573,
       "name": "f_573",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32,i32,i32)->(i32)",
       "body_bytes": 348,
       "callers": 7,
       "callees": 17,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 574,
       "name": "f_574",
-      "role": "unknown",
+      "role": "loop_iter",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 95,
       "callers": 0,
       "callees": 4,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "loop-based iter/parser (size=95)"
     },
     {
       "func_idx": 575,
       "name": "f_575",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 156,
       "callers": 0,
       "callees": 4,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (2)"
     },
     {
       "func_idx": 576,
@@ -6943,86 +7300,93 @@
     {
       "func_idx": 577,
       "name": "f_577",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->()",
       "body_bytes": 185,
       "callers": 2,
       "callees": 10,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (3)"
     },
     {
       "func_idx": 578,
       "name": "f_578",
-      "role": "unknown",
+      "role": "runtime_string_io",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 115,
       "callers": 1547,
       "callees": 0,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "shared byte/string runtime helper (called everywhere)"
     },
     {
       "func_idx": 579,
       "name": "f_579",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32)->()",
       "body_bytes": 384,
       "callers": 7,
       "callees": 14,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "format! + unreachable (size=384)"
     },
     {
       "func_idx": 580,
       "name": "f_580",
-      "role": "unknown",
+      "role": "format_helper",
       "signature": "(i32,i32)->()",
       "body_bytes": 782,
       "callers": 4,
       "callees": 41,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "medium format helper (size=782, calls=41)"
     },
     {
       "func_idx": 581,
       "name": "f_581",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32,i32,i32)->()",
       "body_bytes": 7149,
       "callers": 19,
       "callees": 303,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 582,
       "name": "f_582",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 513,
       "callers": 3,
       "callees": 20,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "large panic helper (size=513)"
     },
     {
       "func_idx": 583,
       "name": "f_583",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->()",
       "body_bytes": 252,
       "callers": 5,
       "callees": 12,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (5)"
     },
     {
       "func_idx": 584,
@@ -7039,14 +7403,15 @@
     {
       "func_idx": 585,
       "name": "f_585",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32,i32)->()",
       "body_bytes": 239,
       "callers": 2,
       "callees": 7,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "format! + unreachable (size=239)"
     },
     {
       "func_idx": 586,
@@ -7075,62 +7440,67 @@
     {
       "func_idx": 588,
       "name": "f_588",
-      "role": "unknown",
+      "role": "deobf_consumer",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 2534,
       "callers": 5,
       "callees": 121,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "inline XOR keys present (2)"
     },
     {
       "func_idx": 589,
       "name": "f_589",
-      "role": "unknown",
+      "role": "vtable_dispatch",
       "signature": "(i32,i32)->(i32)",
       "body_bytes": 399,
       "callers": 0,
       "callees": 18,
       "is_exported": false,
       "export_name": "",
-      "is_import": false
+      "is_import": false,
+      "role_note": "call_indirect + 17 direct"
     },
     {
       "func_idx": 590,
       "name": "sc",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32,i32,f32)->(f32)",
       "body_bytes": 419,
       "callers": 0,
       "callees": 0,
       "is_exported": true,
       "export_name": "sc",
-      "is_import": false
+      "is_import": false,
+      "role_note": "large panic helper (size=419)"
     },
     {
       "func_idx": 591,
       "name": "tc",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32,i32,i32,i32)->(f64)",
       "body_bytes": 614,
       "callers": 0,
       "callees": 0,
       "is_exported": true,
       "export_name": "tc",
-      "is_import": false
+      "is_import": false,
+      "role_note": "large panic helper (size=614)"
     },
     {
       "func_idx": 592,
       "name": "uc",
-      "role": "unknown",
+      "role": "panic_format",
       "signature": "(i32,i32,i32,i32,f64,i32)->(i32)",
       "body_bytes": 126,
       "callers": 0,
       "callees": 6,
       "is_exported": true,
       "export_name": "uc",
-      "is_import": false
+      "is_import": false,
+      "role_note": "format! + unreachable (size=126)"
     },
     {
       "func_idx": 593,
