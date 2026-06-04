@@ -194,3 +194,4 @@ hsw_master_key*.json
 hcaptcha_master_keys.json
 *.bin
 *.wasm
+tools/_archive_cache/
