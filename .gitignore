@@ -198,3 +198,4 @@ tools/_archive_cache/
 data/hsw.js
 data/hsw_pretty.js
 tools/n_token_decrypt_probe.last.json
+tools/capture_ntoken_key.last.json

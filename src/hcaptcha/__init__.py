@@ -32,10 +32,11 @@ from .hsw_bridge import HSWBridge, HSWAnalyzer
 from .hsw_client import HSW
 from . import hsw_crypto
 from . import hsw_pow
-# Opt-in N-key extractors (see module docstrings for build-era applicability):
+# N-key extractors (see module docstrings for build-era applicability):
 from . import hsw_n_key
 from . import hsw_n_key_runtime
 from . import hsw_n_key_full
+from . import hsw_n_key_capture          # FINAL extractor: direct AES-site capture
 from . import hsw_deobf_emulator
 
 __all__ = [
@@ -50,6 +51,7 @@ __all__ = [
     "hsw_n_key",
     "hsw_n_key_runtime",
     "hsw_n_key_full",
+    "hsw_n_key_capture",
     "hsw_deobf_emulator",
 ]
-__version__ = "1.4.0"
+__version__ = "1.5.0"

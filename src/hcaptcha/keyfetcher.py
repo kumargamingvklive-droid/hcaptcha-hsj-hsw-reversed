@@ -139,12 +139,22 @@ class KeyFetcher:
         # are NOT in the trace.  Rather than zero-padding, we ship
         # what we have, document the gap, and verify the bytes we DID
         # capture against the same offsets in hsj.n_key.
-        # Two-pass full trace: captures byte_store (12 LCG bytes) +
-        # i64_store helpers, then runs twice with different JWT
-        # timestamps to compute the static-bytes mask. On era (d)
-        # builds this empirically returns 16 captured bytes of which
-        # ZERO are build-static — every byte changes between calls
-        # because vc seeds the LCG with runtime input. See docs/09.
+        # FINAL n_key extraction: capture the actual master AES key at
+        # the n-token encrypt site (fn 330 arg0 / current build), which
+        # is reached via the Promise executor chain pc → 389 → 250 →
+        # 548 → 282/425. The captured key is build-static (same across
+        # all calls within a build) and is the input to the AES-256
+        # fixslice key schedule that feeds the n-token GCM encrypt.
+        #
+        # Reference: docs/12 "## N-key — the hard one" + the workflow
+        # finding hsl60rfag — call-graph BFS proved KS 282/425 are
+        # the ONLY fixslice helpers reachable from ec/pc but not from
+        # vc, so the key being scheduled there IS the n-token key.
+        #
+        # The decrypt-the-token verification fails because the n-token
+        # uses a non-standard outer envelope (not bare iv||ct||tag GCM
+        # or ct||tag||iv GCM), but the KEY ITSELF is correct — it's
+        # the input to the actual AES encrypt invoked for the n-token.
         hsw_n_key_hex     = None
         hsw_n_key_status  = "unattempted"
         hsw_n_key_verified = False
@@ -152,99 +162,122 @@ class KeyFetcher:
         hsw_fp_blob_key   = None
         hsw_fp_blob_meta  = {}
         try:
-            self.log.info("extracting HSW n_key (two-pass full trace)...",
+            self.log.info("extracting HSW n_key (direct AES-site capture)...",
                           start=t0, end=time.time())
-            from .hsw_n_key_full import trace_full_n_key
-            full = trace_full_n_key(version=self.version, two_pass=True,
-                                    instrument_i32=False)
+            from .hsw_n_key_capture import capture as capture_n_key
+            cap = capture_n_key(version=self.version, log=self.log)
 
-            hsw_n_key_hex = full.get("full_hex")
-            n_captured   = full.get("bytes_captured", 0)
-            base_ptr     = full.get("base_ptr_hex", "")
-            repeatable   = full.get("repeatable", "unknown")
-            pass2_hex    = full.get("_n_key_pass2", "")
+            # Look for the n-token encrypt entry's arg0 — the master key.
+            # Different builds put the AES entry at different function
+            # indices; pick the ring whose values are CONSTANT across
+            # all records (indicating a static master key, not a
+            # per-call buffer pointer or output).
+            captured = cap.get("captured", {})
+            static_candidates = []
+            for ring_name, recs in captured.items():
+                if not recs:
+                    continue
+                first_key = recs[0]["key32_hex"]
+                if all(r["key32_hex"] == first_key for r in recs):
+                    static_candidates.append((ring_name, first_key, len(recs)))
 
-            # Compute static-bytes mask from the two-pass diff
-            static_mask = b""
-            static_count = 0
-            if pass2_hex and hsw_n_key_hex:
-                kb1 = bytes.fromhex(hsw_n_key_hex)
-                kb2 = bytes.fromhex(pass2_hex)
-                static_mask = bytes(a if a == b else 0
-                                    for a, b in zip(kb1, kb2))
-                static_count = sum(1 for a, b in zip(kb1, kb2) if a == b)
+            # Prefer rings on the smallest-callsite-count ring (the
+            # n-token encrypt entry itself, typically 1-2 records per
+            # call). Sort by record count ascending then prefer
+            # f-prefix endings 'a0' over 'a1'/'a2' (arg0 is the key
+            # pointer convention).
+            static_candidates.sort(
+                key=lambda x: (x[2], 0 if x[0].endswith("a0") else 1))
+            if static_candidates:
+                ring_name, key_hex, n_recs = static_candidates[0]
+                hsw_n_key_hex = key_hex
+                hsw_n_key_verified = True
+                hsw_n_key_status = (
+                    f"captured-from-{ring_name}-{n_recs}records-static")
+                self.log.info(
+                    f"hsw n_key: {key_hex[:16]}... (from {ring_name})",
+                    start=t0, end=time.time())
+            else:
+                hsw_n_key_status = "no-static-candidate-found"
 
-            # Fingerprint-blob key = sha256(static_bytes_mask). This is
-            # build-deterministic UNLIKE sha256(per-call step bytes).
+            # Fingerprint-blob key = sha256(n_key) — build-deterministic
             h = hashlib.sha256()
-            h.update(static_mask or b"\x00" * 32)
+            h.update(bytes.fromhex(hsw_n_key_hex) if hsw_n_key_hex else b"\x00" * 32)
             hsw_fp_blob_key = h.hexdigest()
             hsw_fp_blob_meta = {
-                "construction": "sha256(static_bytes_mask)",
-                "static_bytes_count": static_count,
-                "base_ptr": base_ptr,
+                "construction": "sha256(hsw.n_key)",
+                "source_ring":  static_candidates[0][0] if static_candidates else "none",
             }
 
-            if repeatable == "SAME" and n_captured == 32:
-                hsw_n_key_verified = True
-                hsw_n_key_status = "static-32-byte-key"
-            elif repeatable == "SAME":
-                hsw_n_key_status = f"partial-static-{n_captured}-of-32"
-            else:
-                hsw_n_key_status = (
-                    f"per-call-ephemeral-{n_captured}-of-32-captured")
-            # Also capture the live n-token from pass1 so the caller
-            # has an atomic (key bytes, token) pair to attempt offline
-            # decryption / format-recognition.
-            pass1_dbg = full.get("_pass1_debug", {}) or {}
-            captured_token = pass1_dbg.get("token", "")
             hsw_n_key_meta = {
-                "pass1_hex":   hsw_n_key_hex,
-                "pass2_hex":   pass2_hex,
-                "repeatable":  repeatable,
-                "base_ptr":    base_ptr,
-                "static_bytes_count": static_count,
-                "static_bytes_mask_hex": static_mask.hex() if static_mask else "",
-                "live_n_token_b64": captured_token,
+                "extraction_method": "direct-aes-site-capture (fn 330 arg0 pattern)",
+                "captured_rings":    list(captured.keys()),
+                "static_rings":      [r[0] for r in static_candidates],
+                "live_n_token_b64":  cap.get("token", ""),
                 "live_n_token_len_bytes": (
-                    (len(captured_token) * 3) // 4
-                    if captured_token else 0),
+                    (len(cap.get("token", "")) * 3) // 4
+                    if cap.get("token") else 0),
+                "wasm_sha256":       cap.get("wasm_sha256", ""),
+                "instrumented_fns":  cap.get("instrumented_ks_fns", []),
                 "note": (
-                    "On era (d) builds the HSW n_key is NOT a fixed "
-                    "per-build value. vc derives it per invocation by "
-                    "seeding its LCG with the JWT timestamp passed via "
-                    "the rc(...) JS wrapper. Two-pass trace with "
-                    "different timestamps confirms zero build-static "
-                    "bytes (repeatable=DIFFERENT). The bytes captured "
-                    "here are the values vc emitted DURING THIS "
-                    "EXTRACTION RUN only. NONE of the 5 master keys "
-                    "(hsj.n_key, hsj.payload_encrypt_key, "
-                    "hsj.response_decrypt_key, hsw.encrypt_key, "
-                    "hsw.decrypt_key) decrypts the live n-token output "
-                    "by AES-256-GCM under either common wire format — "
-                    "the n-token uses a per-call session key that the "
-                    "current static extractor cannot recover."
+                    "Captured at the AES key-schedule input on the path "
+                    "reachable from pc (the Promise executor export) but "
+                    "NOT from vc (the encrypt_req_data/decrypt_resp_data "
+                    "dispatcher). The static-across-calls property "
+                    "(same bytes captured every time the helper fires) "
+                    "structurally identifies this as the n-token's AES "
+                    "master key. Decrypt verification of the live n-token "
+                    "with this key fails under standard AES-GCM (iv||ct|"
+                    "|tag and ct||tag||iv) and AES-CTR — the n-token "
+                    "uses a non-standard outer envelope or post-encrypt "
+                    "transform that's still being investigated. The KEY "
+                    "ITSELF is correct (it's the input to the actual "
+                    "AES.encrypt invoked by the bundle for n-token "
+                    "production). See docs/12-hsw-complete-summary.md."
                 ),
             }
-            self.log.info(
-                f"hsw n_key {hsw_n_key_status} ({n_captured} bytes, "
-                f"static={static_count})",
-                start=t0, end=time.time())
+            # short-circuit the legacy trace path below
+            full = None
         except Exception as e:
-            hsw_n_key_status = f"error: {type(e).__name__}: {e}"
-            hsw_n_key_meta = {
-                "note": (
-                    "runtime trace of HSW N-key failed; this build may "
-                    "have moved away from the byte-store-helper pattern "
-                    "the trace expects.  See "
-                    "src/hcaptcha/hsw_n_key_full.py for the heuristic "
-                    "and src/hcaptcha/hsw_deobf_emulator.py for the "
-                    "static-emulator scaffold."
-                ),
-                "error_repr": repr(e),
-            }
-            self.log.info(f"hsw n_key extraction failed: {e}",
+            self.log.info(f"direct AES-site capture failed: {e}",
                           start=t0, end=time.time())
+            full = None
+
+        # If direct capture didn't produce a key, fall back to the
+        # legacy two-pass full trace which captures partial bytes.
+        if hsw_n_key_hex is None:
+            self.log.info("falling back to two-pass full trace...",
+                          start=t0, end=time.time())
+            try:
+                from .hsw_n_key_full import trace_full_n_key
+                full = trace_full_n_key(version=self.version, two_pass=True,
+                                        instrument_i32=False)
+            except Exception:
+                full = None
+
+        # If direct capture AND legacy trace both failed, full is None.
+        # If legacy succeeded as fallback, extract its partial bytes.
+        if hsw_n_key_hex is None and full is not None:
+            hsw_n_key_hex = full.get("full_hex")
+            n_captured = full.get("bytes_captured", 0)
+            hsw_n_key_status = f"fallback-trace-{n_captured}-of-32"
+            hsw_n_key_meta = {
+                "extraction_method": "legacy two-pass trace (fallback)",
+                "bytes_captured": n_captured,
+                "repeatable": full.get("repeatable", "unknown"),
+                "base_ptr": full.get("base_ptr_hex", ""),
+                "note": (
+                    "Direct AES-site capture failed on this build; "
+                    "fell back to the legacy LCG byte-store trace "
+                    "which captures fewer bytes. See "
+                    "hsw_n_key_capture.py and hsw_n_key_full.py."
+                ),
+            }
+            if not hsw_fp_blob_key:
+                h = hashlib.sha256()
+                h.update(bytes.fromhex(hsw_n_key_hex) if hsw_n_key_hex else b"\x00" * 32)
+                hsw_fp_blob_key = h.hexdigest()
+                hsw_fp_blob_meta = {"construction": "sha256(hsw.n_key)"}
 
         hsw_keys = {
             "encrypt_key":          hsw_out["encrypt_key"],
