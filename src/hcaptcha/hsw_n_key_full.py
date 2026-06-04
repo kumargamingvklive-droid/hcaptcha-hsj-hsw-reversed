@@ -101,6 +101,14 @@ TMP_A_I64  = 200_020
 TMP_C_I32  = 200_032
 TMP_A_I32  = 200_036
 
+# Gate slot: only record i32_store/i64_store writes when this is nonzero.
+# Set to 1 from Python BEFORE calling window.hsw(jwt), reset to 0 after.
+# This prevents the i32_store helper (which fires from many non-vc paths
+# during JS warm-up + setTimeout callbacks) from flooding our ring buffer
+# with noise and indirectly causing the WASM to take pathological code
+# paths that crash on missing JS API methods.
+GATE_ADDR = 200_048
+
 N_KEY_LCG_MULT = 6364136223846793005     # 0x5851F42D4C957F2D
 
 
@@ -206,11 +214,20 @@ def _detect_mask_vaddr(mod: WasmModule, helper_idx: int) -> Optional[int]:
 def _build_prologue_3args(counter_addr: int, buf_addr: int, max_recs: int,
                           rec_size: int, tmp_c: int, tmp_a: int,
                           base_local: int, off_local: int, val_local: int,
-                          val_is_i64: bool) -> bytes:
+                          val_is_i64: bool, gated: bool = False) -> bytes:
     """Generic prologue for a 3-or-4-arg helper that stores
     (base, off, val) where val is i32 or i64. Doesn't use any wasm
-    locals — only scratch memory slots."""
+    locals — only scratch memory slots.
+
+    If gated=True, wraps the recording in `if (*GATE_ADDR != 0)` so
+    recording only happens when Python has flipped the gate on.
+    """
     out = bytearray()
+    if gated:
+        # if (*GATE_ADDR != 0) {
+        out += b"\x41" + encode_sleb(GATE_ADDR)
+        out += b"\x28\x02\x00"                           # i32.load
+        out += b"\x04\x40"                               # if (empty)
     # tmp_c = *counter
     out += b"\x41" + encode_sleb(tmp_c)
     out += b"\x41" + encode_sleb(counter_addr)
@@ -256,7 +273,9 @@ def _build_prologue_3args(counter_addr: int, buf_addr: int, max_recs: int,
     out += b"\x41" + encode_sleb(1)
     out += b"\x6a"
     out += b"\x36\x02\x00"
-    out += b"\x0b"                                       # end (if)
+    out += b"\x0b"                                       # end (if counter < max)
+    if gated:
+        out += b"\x0b"                                   # end (if gate)
     return bytes(out)
 
 
@@ -313,20 +332,27 @@ def _make_jwt(timestamp_offset: int = 0) -> str:
 
 def _run_and_capture(rt: JsRuntime, jwt: str, log: Logger,
                      have_i64: bool, have_i32: bool) -> dict:
+    # Open the gate, drive window.hsw(jwt), close the gate.
+    # See GATE_ADDR docstring for rationale.
     rt.eval(
         f"""
         globalThis.__nkey_done = 0;
         globalThis.__nkey_err = '';
+        globalThis.__nkey_token = '';
         (async () => {{
             const e = globalThis.__hsw_exports;
             e.__poke32({SCRATCH_COUNTER_BYTE}, 0);
             e.__poke32({SCRATCH_COUNTER_I64}, 0);
             e.__poke32({SCRATCH_COUNTER_I32}, 0);
+            e.__poke32({GATE_ADDR}, 1);                /* open gate */
             try {{
                 const r = await window.hsw('{jwt}');
                 globalThis.__nkey_result = String(r);
+                globalThis.__nkey_token = (typeof r === "string") ? r : "";
             }} catch (ex) {{
                 globalThis.__nkey_err = String(ex);
+            }} finally {{
+                e.__poke32({GATE_ADDR}, 0);            /* close gate */
             }}
             globalThis.__nkey_done = 1;
         }})();
@@ -387,10 +413,38 @@ def _run_and_capture(rt: JsRuntime, jwt: str, log: Logger,
             off -= 0x100000000
         i32_rec.append((bp & 0xFFFFFFFF, off, val & 0xFFFFFFFF))
 
+    # POST-CALL MEMORY READ: capture the token + 64 bytes of linear memory
+    # starting at every distinct base_ptr we saw in the byte_store ring.
+    # After window.hsw(jwt) returns, the WASM's stack frame for vc has
+    # already been freed — but the LCG-derived bytes ARE in linear memory
+    # AT THE MOMENT THE BYTE-STORE FIRED. We can't read them post-call
+    # because the stack memory has been re-used by subsequent calls.
+    #
+    # However the LCG buffer base address is captured, so we can attempt
+    # to read it. (In practice these reads typically return all-zeros
+    # because vc has reused the stack frame, but we record what we get.)
+    token = rt.eval("globalThis.__nkey_token") or ""
+
+    distinct_bases = sorted({bp for bp, _, _ in byte_rec})
+    mem_dumps = {}
+    for bp in distinct_bases[:8]:           # cap at 8 to keep IO bounded
+        # Read 64 bytes around bp (32 before, 32 after) as four u64s.
+        words = rt.eval(
+            f"""(function() {{
+                const mem = new Uint8Array(globalThis.__hsw_memory.buffer,
+                                            {bp - 0}, 64);
+                return Array.from(mem);
+            }})()"""
+        )
+        if words:
+            mem_dumps[bp] = bytes(words)
+
     return {
         "byte": byte_rec,
         "i64":  i64_rec,
         "i32":  i32_rec,
+        "mem":  mem_dumps,
+        "token": token,
     }
 
 
@@ -536,6 +590,11 @@ def _build_n_key_from_captures(captures: dict,
                 xored = (val ^ mask) & 0xFFFFFFFF
                 matching_i32.append((bp, off, virt, val, xored))
 
+    # Also include the post-call mem dumps + token from the captures
+    # (these come from _run_and_capture and we want them in the debug)
+    mem_dumps = captures.get("mem", {})
+    token = captures.get("token", "")
+
     return bytes(kb), n_key_base, {
         "byte_map": byte_map,
         "filled": best_filled,
@@ -545,6 +604,10 @@ def _build_n_key_from_captures(captures: dict,
         "matching_i32": matching_i32,
         "lcg_base": lcg_base,
         "n_key_base": n_key_base,
+        "mem": mem_dumps,
+        "token": token,
+        "byte_count": len(byte_rec),
+        "distinct_bases": len({bp for bp, _, _ in byte_rec}),
     }
 
 
@@ -619,6 +682,12 @@ def trace_full_n_key(version: Optional[str] = None,
         i64_store = None
     if i32_store is not None and instrument_i32:
         # i32-store params: (base i32, off i32, val i32)
+        # GATED — this helper is called from many non-vc paths during
+        # JS warm-up, polyfill init, and setTimeout callbacks. Without
+        # the gate, instrumentation pollutes the ring buffer and
+        # subtly perturbs execution timing enough to make the WASM
+        # take rare code paths that hit jsdom API gaps. We toggle the
+        # gate from Python ONLY around the window.hsw(jwt) call.
         writer.code.splice_code(
             i32_store, 0, n_replace=0,
             new_bytes=_build_prologue_3args(
@@ -626,7 +695,7 @@ def trace_full_n_key(version: Optional[str] = None,
                 MAX_I32, REC_I32,
                 TMP_C_I32, TMP_A_I32,
                 base_local=0, off_local=1, val_local=2,
-                val_is_i64=False))
+                val_is_i64=False, gated=True))
     else:
         i32_store = None
 

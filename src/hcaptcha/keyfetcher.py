@@ -193,6 +193,11 @@ class KeyFetcher:
             else:
                 hsw_n_key_status = (
                     f"per-call-ephemeral-{n_captured}-of-32-captured")
+            # Also capture the live n-token from pass1 so the caller
+            # has an atomic (key bytes, token) pair to attempt offline
+            # decryption / format-recognition.
+            pass1_dbg = full.get("_pass1_debug", {}) or {}
+            captured_token = pass1_dbg.get("token", "")
             hsw_n_key_meta = {
                 "pass1_hex":   hsw_n_key_hex,
                 "pass2_hex":   pass2_hex,
@@ -200,6 +205,10 @@ class KeyFetcher:
                 "base_ptr":    base_ptr,
                 "static_bytes_count": static_count,
                 "static_bytes_mask_hex": static_mask.hex() if static_mask else "",
+                "live_n_token_b64": captured_token,
+                "live_n_token_len_bytes": (
+                    (len(captured_token) * 3) // 4
+                    if captured_token else 0),
                 "note": (
                     "On era (d) builds the HSW n_key is NOT a fixed "
                     "per-build value. vc derives it per invocation by "
