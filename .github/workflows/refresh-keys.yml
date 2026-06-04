@@ -112,8 +112,25 @@ jobs:
           git add data/
           if git diff --staged --quiet; then
             echo "build hash unchanged — skipping commit"
-          else
-            git commit -m "auto: refresh keys for build ${VERSION:0:12}"
-            git push
-            echo "committed + pushed"
+            exit 0
           fi
+          git commit -m "auto: refresh keys for build ${VERSION:0:12}"
+
+          # Retry up to 5 times: another push may land between fetch and push.
+          for attempt in 1 2 3 4 5; do
+            if git push 2> push.err; then
+              echo "committed + pushed (attempt $attempt)"
+              exit 0
+            fi
+            if ! grep -q "rejected\|non-fast-forward\|fetch first" push.err; then
+              cat push.err
+              exit 1
+            fi
+            echo "push rejected (attempt $attempt) — rebasing on origin/main"
+            git fetch origin main
+            git rebase origin/main
+            sleep $((attempt * 2))
+          done
+
+          echo "::error::push still rejected after 5 attempts"
+          exit 1
