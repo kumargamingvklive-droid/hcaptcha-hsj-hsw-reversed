@@ -1,0 +1,66 @@
+name: CI
+
+# Smoke test on every push to main + every PR. Installs deps, imports
+# the package, runs the fetcher once, and asserts all five keys come
+# out shaped correctly. Does NOT commit anything.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "package.json"
+      - "package-lock.json"
+      - "pyproject.toml"
+      - ".github/workflows/ci.yml"
+  pull_request: {}
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: System libraries for canvas
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev
+
+      - name: Install Python deps
+        run: pip install pycryptodome xxhash msgpack jsbeautifier requests
+
+      - name: Install Node deps
+        run: npm install --no-audit --no-fund
+
+      - name: Import + extract
+        env:
+          PYTHONPATH: src
+        run: |
+          set -euo pipefail
+          python -c "from hcaptcha import KeyFetcher, HSJKeyFetcher, HSWKeyFetcher, HSWBridge; print('imports OK')"
+          python -m hcaptcha > out.json
+          python <<'EOF'
+          import json
+          d = json.load(open("out.json"))
+          assert {"n_key", "response_decrypt_key", "payload_encrypt_key"} <= set(d["hsj"]), "missing HSJ keys"
+          assert {"encrypt_key", "decrypt_key"} <= set(d["hsw"]), "missing HSW keys"
+          assert d["verified"]["hsw_encrypt_key"] is True, "HSW encrypt key did not verify"
+          print(f"OK — version {d['version'][:12]}...")
+          EOF

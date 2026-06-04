@@ -11,6 +11,11 @@
 </p>
 
 <p>
+  <a href="https://github.com/CircuitSavage/hcaptcha-hsj-hsw-reversed/actions/workflows/refresh-keys.yml"><img src="https://github.com/CircuitSavage/hcaptcha-hsj-hsw-reversed/actions/workflows/refresh-keys.yml/badge.svg" alt="Refresh keys"></a>
+  <a href="https://github.com/CircuitSavage/hcaptcha-hsj-hsw-reversed/actions/workflows/ci.yml"><img src="https://github.com/CircuitSavage/hcaptcha-hsj-hsw-reversed/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+</p>
+
+<p>
   <a href="https://t.me/jujucodings"><img src="https://img.shields.io/static/v1?style=social&logo=telegram&label=Telegram&message=%40jujucodings" alt="Telegram @jujucodings"></a>
 </p>
 
@@ -117,6 +122,15 @@ print(keys["hsw"]["encrypt_key"])
 ```
 
 End-to-end runtime: ~8 seconds, including the deobfuscation pass.
+
+### Auto-refresh
+
+A GitHub Actions workflow runs every 12 hours, re-extracts the keys for the current build, and commits the snapshot to [`data/keys.json`](data/keys.json). Historical per-build snapshots accumulate under [`data/archive/`](data/archive/). Manual runs available via the [Actions tab](https://github.com/CircuitSavage/hcaptcha-hsj-hsw-reversed/actions/workflows/refresh-keys.yml).
+
+```bash
+# always-current keys without running the fetcher yourself:
+curl -L https://raw.githubusercontent.com/CircuitSavage/hcaptcha-hsj-hsw-reversed/main/data/keys.json
+```
 
 ---
 

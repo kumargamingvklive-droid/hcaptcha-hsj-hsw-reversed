@@ -1,0 +1,119 @@
+name: Refresh keys
+
+# Runs every 12 hours and on manual dispatch. Fetches the current hCaptcha
+# build, extracts all five master keys, writes them to data/keys.json,
+# and archives the snapshot at data/archive/<version>.json. Commits +
+# pushes only if the build hash rotated (otherwise the run is a no-op).
+#
+# Average runtime: ~2 minutes end-to-end. Well within the free tier.
+
+on:
+  schedule:
+    # 00:00 and 12:00 UTC every day
+    - cron: "0 0,12 * * *"
+  workflow_dispatch: {}      # manual trigger from the Actions tab
+
+permissions:
+  contents: write            # so the bot can push to main
+
+concurrency:
+  group: refresh-keys
+  cancel-in-progress: false  # let any in-flight run finish
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: System libraries for canvas
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev
+
+      - name: Install Python deps
+        run: pip install pycryptodome xxhash msgpack jsbeautifier requests
+
+      - name: Install Node deps
+        run: npm install --no-audit --no-fund
+
+      - name: Extract all five keys
+        id: extract
+        env:
+          PYTHONPATH: src
+        run: |
+          set -euo pipefail
+
+          # Run the fetcher with up to 3 retries (hCaptcha sometimes rate-limits).
+          for attempt in 1 2 3; do
+            if python -m hcaptcha > new_keys.json 2> fetch.log; then
+              break
+            fi
+            echo "::warning::extraction attempt $attempt failed:"
+            tail -n 20 fetch.log
+            sleep $((attempt * 30))
+          done
+
+          # Validate JSON parses + has all five keys
+          python <<'EOF'
+          import json, sys
+          d = json.load(open("new_keys.json"))
+          required_hsj = {"n_key", "response_decrypt_key", "payload_encrypt_key"}
+          required_hsw = {"encrypt_key", "decrypt_key"}
+          missing = []
+          if not required_hsj.issubset(d.get("hsj", {})): missing.append("hsj")
+          if not required_hsw.issubset(d.get("hsw", {})): missing.append("hsw")
+          if not d.get("verified", {}).get("hsw_encrypt_key"):
+              missing.append("hsw verification")
+          if missing:
+              sys.exit(f"output validation failed: missing {missing}")
+          print(f"validated: version {d['version'][:12]}...")
+          EOF
+
+          # Pull version + cipher metadata for the commit message
+          VERSION=$(python -c "import json; print(json.load(open('new_keys.json'))['version'])")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Write current + archive
+        env:
+          VERSION: ${{ steps.extract.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p data data/archive
+          mv new_keys.json data/keys.json
+          cp data/keys.json "data/archive/${VERSION}.json"
+          ls -la data/ data/archive/ | tail -n 20
+
+      - name: Commit + push if changed
+        env:
+          VERSION: ${{ steps.extract.outputs.version }}
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/
+          if git diff --staged --quiet; then
+            echo "build hash unchanged — skipping commit"
+          else
+            git commit -m "auto: refresh keys for build ${VERSION:0:12}"
+            git push
+            echo "committed + pushed"
+          fi
