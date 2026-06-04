@@ -1,0 +1,12 @@
+{
+  "name": "hcaptcha-keys",
+  "version": "1.0.0",
+  "description": "hCaptcha hsj/hsw master-key extraction",
+  "license": "MIT",
+  "dependencies": {
+    "acorn": "^8.16.0",
+    "astring": "^1.9.0",
+    "canvas": "^3.2.3",
+    "jsdom": "^29.1.1"
+  }
+}
