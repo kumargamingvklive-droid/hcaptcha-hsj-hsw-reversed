@@ -67,19 +67,54 @@ The magic numbers are stable for a given build but rotate with
 `<version>`. They're effectively *opcode IDs*. The deobf source makes
 this clear — every wbg-style entry calls `vc(MAGIC, …)`.
 
-## Two crypto paths
+## Three crypto paths
 
-| `window.hsw(…)`     | `vc` magic    | Operation                                       |
-| ------------------- | ------------- | ----------------------------------------------- |
-| `(0, ciphertext)`   | `1011143743`* | AES-GCM decrypt of server response              |
-| `(1, plaintext)`    | `1579470607`* | AES-GCM encrypt of client request payload       |
-| `(jwt)` (no mode)   | n/a           | Proof-of-work over the server-issued `req` JWT  |
+| `window.hsw(…)`     | Dispatch        | Operation                                       | AES master key |
+| ------------------- | --------------- | ----------------------------------------------- | -------------- |
+| `(0, ciphertext)`   | `vc` magic `1011143743`* | AES-256-GCM decrypt of server response | `hsw.decrypt_key` |
+| `(1, plaintext)`    | `vc` magic `1579470607`* | AES-256-GCM encrypt of client request payload | `hsw.encrypt_key` |
+| `(jwt)` (no mode)   | `ec`/`pc` (separate exports from `vc`) | Proof-of-work (Hashcash + SHA-1) + AES-256 encrypt of the n-token | `hsw.n_key` |
 
 \* This version. Magics rotate per build but the dispatcher pattern is invariant.
 
+The third path does **not** go through `vc`. It has its own Promise
+executor exports (`ec` / `pc`) and its own AES key schedule
+(`fn 425` on the current build) reached from `ec`/`pc` only — never
+from `vc`. See [`10-architecture-eras.md`](./10-architecture-eras.md)
+sub-section *Sub-architecture (d.1)* for the call graph and
+[`09-hsw-keys-derivation.md`](./09-hsw-keys-derivation.md) for the
+direct AES-site capture procedure that recovers the n-token AES
+master key.
+
+## Key inventory — 6 build-static AES-256 master keys + fingerprint
+
+| Key                          | Bundle    | Method                                             | Verified |
+| ---------------------------- | --------- | -------------------------------------------------- | -------- |
+| `hsj.n_key`                  | hsj.js    | AST patch on key-schedule stack frame              | ✅       |
+| `hsj.response_decrypt_key`   | hsj.js    | AST patch                                          | ✅       |
+| `hsj.payload_encrypt_key`    | hsj.js    | AST patch                                          | ✅       |
+| `hsw.encrypt_key`            | hsw.js    | WASM bytecode patch + AES-256-GCM round-trip       | ✅       |
+| `hsw.decrypt_key`            | hsw.js    | WASM bytecode patch + Python-encrypt / bundle-decrypt | ✅    |
+| `hsw.n_key`                  | hsw.js    | Direct AES-site capture (fn 330/352 `arg0`, build-static across calls) | ✅ |
+| `hsw.fingerprint_blob_key`   | hsw.js    | `sha256(hsw.n_key)` — derived identifier           | ✅       |
+
+All six AES keys are 32 bytes (AES-256). The fingerprint blob key is
+deterministic given the n-key — it is a per-build identifier rather
+than an independent extraction.
+
+> **Caveat on `hsw.n_key`:** the bytes are the correct AES master key
+> (build-static, captured at the actual AES.encrypt invocation), but
+> the live n-token does not decrypt under the captured key with any
+> standard AES wire format we have tried. The n-token's outer
+> envelope is non-standard (likely PoW-stamp framing around an inner
+> AEAD). The extraction layer is complete; the envelope decode is a
+> separate, consumer-side question. See
+> [`12-hsw-complete-summary.md`](./12-hsw-complete-summary.md).
+
 ## Wire formats
 
-Empirically determined by encrypting plaintexts of known length:
+Empirically determined by encrypting plaintexts of known length on
+the `vc` path (`hsw.encrypt_key` / `hsw.decrypt_key`):
 
 | Plaintext size | Output size | Layout                                |
 | --------------:| -----------:| ------------------------------------- |
@@ -92,6 +127,17 @@ This is standard AES-GCM with a 12-byte random IV and 16-byte tag.
 Note that **HSW's wire format has no trailing version byte** (HSJ has
 a `0x00` trailer). This is the cheapest way to fingerprint which
 bundle produced a given blob.
+
+### n-token envelope (unresolved)
+
+The **third path** (`window.hsw(jwt)`) does NOT use this wire format.
+Token sizes vary call-to-call (2798 B → 4203 B in samples), token
+entropy is 256/256 unique bytes with flat distribution, and
+brute-force decryption with the (now correctly extracted) `hsw.n_key`
+against every standard AES wire variant fails. The token almost
+certainly wraps an inner AEAD in PoW-stamp / length-prefix framing.
+See [`09-hsw-keys-derivation.md`](./09-hsw-keys-derivation.md) and
+[`12-hsw-complete-summary.md`](./12-hsw-complete-summary.md).
 
 ## What's inside the WASM
 

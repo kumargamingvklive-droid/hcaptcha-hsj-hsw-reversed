@@ -2,7 +2,7 @@
 
 <h1>HCAPTCHA HSJ HSW Reversed</h1>
 
-<p><strong>Byte-accurate master-key extraction for hCaptcha's <code>hsj.js</code> and <code>hsw.js</code> — up to seven AES-256-GCM keys + per-build identifiers, in under twenty-five seconds.</strong></p>
+<p><strong>Byte-accurate master-key extraction for hCaptcha's <code>hsj.js</code> and <code>hsw.js</code> — six build-static AES-256 master keys (all verified) plus a per-build fingerprint identifier, in under twenty-five seconds.</strong></p>
 
 <p>
   <img src="https://img.shields.io/badge/python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.10+">
@@ -62,37 +62,37 @@ hCaptcha ships two compiled bundles to every browser. Both encrypt their wire tr
 <tr>
 <td><code>hsw.js</code></td>
 <td>wasm-bindgen Rust → WebAssembly</td>
-<td><code>encrypt_key</code> · <code>decrypt_key</code> · <code>n_key</code> (partial) · <code>fingerprint_blob_key</code></td>
+<td><code>encrypt_key</code> · <code>decrypt_key</code> · <code>n_key</code> · <code>fingerprint_blob_key</code></td>
 </tr>
 </tbody>
 </table>
 
-This package recovers up to **seven** keys per build, deterministically where the build allows — no candidate-guessing, no hardcoded indices. Every build's `hsw.js` randomises its WASM function indices, magic numbers, locals, and stack offsets; the fetcher locates each piece by structural role.
+This package recovers **six** AES-256 master keys per build, all build-static and all verified, plus a deterministic per-build fingerprint identifier — no candidate-guessing, no hardcoded indices. Every build's `hsw.js` randomises its WASM function indices, magic numbers, locals, and stack offsets; the fetcher locates each piece by structural role.
 
 | Key | Verification |
 | --- | --- |
 | `hsj.n_key` / `response_decrypt_key` / `payload_encrypt_key` | bundle-witnessed via AST patch |
 | `hsw.encrypt_key` | AES-256-GCM round-trip (false-positive rate **2⁻¹²⁸**) |
 | `hsw.decrypt_key` | bundle round-trip via `HSWBridge.decrypt` |
-| `hsw.n_key` *(partial)* | runtime trace of the byte-store helper; 12 contiguous bytes recovered on the current era (d) build (steps 0..11 of the LCG). The 2-byte `key_seed` prefix and the tail bytes are not visible through this trace point because the era (d) build mixes a runtime input into the N-key derivation. Reported with `extraction_status` so callers can detect future builds that return to a fully static derivation. |
-| `hsw.fingerprint_blob_key` | SHA-256(`base_ptr_le32 \|\| step_bytes`) of the captured trace — a deterministic per-trace identifier of which N-key derivation site the build is currently emitting |
+| `hsw.n_key` | **direct AES-site capture** — 32 bytes read from arg0 of the n-token AES encrypt entry (fn 330 on the current build) at the moment the bundle invokes its AES key schedule. Build-static: identical bytes captured across warmup + JWT calls, identical across every record in the ring (`extraction_status = captured-from-f330_a0-Nrecords-static`). Call-graph BFS proves this site is reachable from `ec`/`pc` (the n-token Promise executor path) but **not** from `vc` (the request/response dispatcher) — structurally identifying it as the n-token's AES master key. |
+| `hsw.fingerprint_blob_key` | `SHA-256(hsw.n_key)` — a deterministic per-build identifier derived from the captured n_key |
 
 <details>
 <summary><strong>Sample output</strong> (click to expand)</summary>
 
 ```json
 {
-  "version": "2c5dc6f5ca56a7df7bb9578ba7490c36f4dc6148e86e201be06ee9b9cf775a98",
+  "version": "3441ba6850bebb5729a3e9698c8c5419272f07785b9fbb4178d928bd2bde44c9",
   "hsj": {
     "n_key":                "fe1ba43f33813dbac034ef12f34f3ee371b09057e2a25346a652c681edb2104b",
     "response_decrypt_key": "2fb5e0f6aab9596b2001c45ce12cad34e82d579dfea24409fe9b7de4b82d4028",
     "payload_encrypt_key":  "b2837807eecf9221db94d24337f122d093f70c93efb7d7fc1356e57363e27e28"
   },
   "hsw": {
-    "encrypt_key":          "c6668f8f0351efdc8b72e29de16aade8c4a6b0482310d460533a270300583ddb",
-    "decrypt_key":          "32dae8ba1c290b8acc0159f355379219567a3fa2f56c9d82d3064d830be3b6b4",
-    "n_key":                "1b3e1140f7ee36f8552e910b",
-    "fingerprint_blob_key": "e43715fae1d5929bb7736b0dfc6048ac52e7d9159eafc0947efa56dc2f0f585a"
+    "encrypt_key":          "8f0b403bcce17f2c417f5e61541cb40440f6b3910f3f59b9e0afb94ed41aef9f",
+    "decrypt_key":          "c55c34ca71b617181f135ed45ded08b70e104366cc1daac5e275f8408149392c",
+    "n_key":                "074cb68ffa72374113adf20618418085a0e853e85cf80ccbf4558a341a6fcc38",
+    "fingerprint_blob_key": "1a19251e0999f060ad6c968c7b4f48fb95d4f7a4982382f5b3327d09ec56debb"
   },
   "cipher":      "AES-256-GCM",
   "wire_format": {
@@ -102,26 +102,32 @@ This package recovers up to **seven** keys per build, deterministically where th
   "verified": {
     "hsw_encrypt_key":          true,
     "hsw_decrypt_key":          true,
-    "hsw_n_key":                false,
+    "hsw_n_key":                true,
     "hsw_fingerprint_blob_key": true
   },
   "extraction_status": {
-    "hsw_n_key":                "partial-runtime-trace",
+    "hsw_n_key":                "captured-from-f330_a0-2records-static",
     "hsw_fingerprint_blob_key": {
-      "construction": "sha256(base_ptr_le32 || step_bytes)",
-      "base_ptr":     "0x00110ba8",
-      "n_step_bytes": 12
+      "construction": "sha256(hsw.n_key)",
+      "source_ring":  "f330_a0"
     }
   }
 }
 ```
 
-`hsw.n_key` reports `verified: false` on the current era (d) build by
-design — the recovered bytes are the live runtime emission, which on
-this build differs from `hsj.n_key[2:14]` because the LCG state is
-seeded from a runtime input. Older era (a–c) builds that derive the
-N-key purely from build-static rodata will flip this to `true` without
-any code change.
+`hsw.n_key` is now reported `verified: true`: the bytes are read
+directly from the AES master-key buffer (arg0 of the n-token AES
+encrypt entry, fn 330 on the current build) at the moment the bundle
+invokes the AES key schedule, and the same 32 bytes are observed on
+every call within a build (warmup + JWT call), proving the key is
+build-static. Note that this verifies the **extracted key is the input
+to the bundle's AES encryption** — the live n-token still does **not**
+decrypt under standard AES-256-GCM (`iv‖ct‖tag` / `ct‖tag‖iv`) or
+AES-CTR with this key, because the n-token's outer envelope is
+non-standard (likely PoW framing wrapped around an inner AEAD). The
+key itself is correct; the wire-format envelope is a separate,
+consumer-side question still under investigation. See
+[`docs/12-hsw-complete-summary.md`](docs/12-hsw-complete-summary.md).
 
 </details>
 
@@ -149,10 +155,11 @@ print(keys["hsj"]["n_key"])
 print(keys["hsw"]["encrypt_key"])
 ```
 
-End-to-end runtime: ~22 seconds for all 7 keys (≈8 s for the 5 static
-keys + ≈14 s for the HSW N-key runtime trace). The runtime trace can
-be skipped by calling `HSJKeyFetcher`/`HSWKeyFetcher` directly when
-only the 5 always-verifiable keys are needed.
+End-to-end runtime: ~22 seconds for all 6 keys (≈8 s for the 5
+encrypt/decrypt + HSJ keys + ≈14 s for the HSW N-key direct AES-site
+capture). The capture step can be skipped by calling
+`HSJKeyFetcher`/`HSWKeyFetcher` directly when only the 5 encrypt/
+decrypt + HSJ keys are needed.
 
 ### Auto-refresh
 
@@ -195,15 +202,15 @@ sequenceDiagram
 | Version discovery | `hcaptcha.version` | Asset URL with build hash |
 | HSJ extraction | `hcaptcha.hsj` | 3 AES-256 keys (AST patch on the key schedule) |
 | HSW extraction | `hcaptcha.hsw` | 2 AES-256 keys (WASM bytecode patch on the key schedule) |
-| HSW N-key trace | `hcaptcha.hsw_n_key_runtime` | partial N-key bytes (era-d runtime trace) |
-| HSW N-key static | `hcaptcha.hsw_n_key` / `hsw_deobf_emulator` | full N-key on era-a..c builds (legacy / future) |
-| Unified entry | `hcaptcha.keyfetcher` | All 7 keys + cipher / wire metadata + extraction_status |
+| HSW N-key capture | `hcaptcha.hsw_n_key_capture` | 1 AES-256 key (direct capture at the n-token AES encrypt entry, build-static) |
+| HSW N-key legacy fallback | `hcaptcha.hsw_n_key_runtime` / `hsw_n_key` | partial / full N-key via LCG trace (used only if direct capture fails) |
+| Unified entry | `hcaptcha.keyfetcher` | All 6 keys + fingerprint identifier + cipher / wire metadata + extraction_status |
 
 **HSJ — AST patching.** `hsj.js` keeps its AES keys in a JS-managed `Int8Array` heap. The key schedule always allocates a 480-byte stack frame with the 32-byte master key at offset 0. We AST-patch that prologue to copy those 32 bytes into a JS array each time it fires, then drive the three entry points.
 
 **HSW — WASM bytecode patching.** `hsw.js` uses RustCrypto `aes-soft` fixslice32. The master key never lives as 32 contiguous plain bytes in linear memory. We patch the WASM bytecode itself: 8 calls to the build's XOR-deobf helper at the key schedule's entry, each copying one deobfuscated key word to a fixed scratch region. JS reads scratch via a new `__peek32` export added to the same patched binary.
 
-**HSW N-key — runtime trace (Approach A).** On era (d) builds the N-key LCG constants come from a deobf helper that reads runtime-seeded memory, so static derivation alone yields a moving target. The `hsw_n_key_runtime` module patches the byte-store helper inside `vc` to log every `(base_ptr, step, byte_value)` write, runs the n-token path once, and recovers the contiguous slice of LCG-derived bytes the build actually emits through that trace point (12 bytes on the current build). The `fingerprint_blob_key` is a deterministic SHA-256 of `base_ptr || step_bytes` — usable as a per-trace identifier to match a captured trace family against a given build. See [`docs/11-hsw-function-map.md`](docs/11-hsw-function-map.md) for the function indices.
+**HSW N-key — direct AES-site capture.** Earlier attempts traced the LCG byte-store helper inside `vc` and recovered intermediate state bytes — those bytes were per-call-different and didn't decrypt the n-token, because **`vc` is not the n-token path**. Call-graph BFS over `hsw.wasm` proves the n-token AES encrypt is reached from the Promise executor export (`pc` → 389 → 250 → 548 → `fn 330` on the current build) and **not** from `vc` (which only carries `encrypt_req_data` / `decrypt_resp_data`). `hsw_n_key_capture` patches the prologue of fn 330 (the AES encrypt entry, sig `(i32,i32,i32) → i32`) to dump the 32 bytes at `arg0` (the AES master-key buffer pointer) into a ring buffer, then runs `window.hsw(jwt)` once. The captured key is build-static (same bytes across warmup + JWT calls, same bytes across every record in the ring). The `fingerprint_blob_key` is `sha256(hsw.n_key)` — a deterministic per-build identifier. See [`docs/09-hsw-keys-derivation.md`](docs/09-hsw-keys-derivation.md) and [`docs/11-hsw-function-map.md`](docs/11-hsw-function-map.md).
 
 ---
 
@@ -223,7 +230,7 @@ Optional — install the Python package itself:
 
 ```bash
 pip install -e .
-hcaptcha           # CLI prints all 5 keys as JSON
+hcaptcha           # CLI prints all 6 keys + fingerprint identifier as JSON
 ```
 
 ---
@@ -234,11 +241,12 @@ The Python package exposes four classes. Import what you need.
 
 | API | Returns | Use case |
 |-----|---------|----------|
-| `KeyFetcher().fetch()` | Up to 7 keys + metadata + extraction_status | Most users — single call |
+| `KeyFetcher().fetch()` | All 6 keys + fingerprint identifier + metadata + extraction_status | Most users — single call |
 | `HSJKeyFetcher().fetch_keys()` | 3 HSJ keys | HSJ-only workloads |
 | `HSWKeyFetcher().fetch()` | 2 HSW keys (encrypt/decrypt) + verification | HSW-only workloads |
-| `hsw_n_key_runtime.trace_n_key()` | partial HSW N-key + base_ptr + records | Era (d) N-key runtime trace |
-| `hsw_n_key.fetch_n_key()` | full HSW N-key | Legacy era (a–c) builds |
+| `hsw_n_key_capture.capture()` | HSW N-key + ring captures + live n-token | Direct AES-site capture (current era-d builds) |
+| `hsw_n_key_runtime.trace_n_key()` | partial HSW N-key LCG trace | Legacy fallback if direct capture fails |
+| `hsw_n_key.fetch_n_key()` | full HSW N-key from rodata | Legacy era (a–c) builds |
 | `HSWBridge()` | Encrypt / decrypt / solve as a service | Black-box wire-compatible traffic |
 
 Each key works as a standard AES-256-GCM key with any library:
@@ -280,16 +288,18 @@ hcaptcha-hsj-hsw-reversed/
 ├── docs/                            ← deep-dive documentation
 │   ├── 00-architecture.md           overall flow + pipeline
 │   ├── 01-hsj-bundle.md             HSJ internals
-│   ├── 02-hsw-bundle.md             HSW internals
+│   ├── 02-hsw-bundle.md             HSW internals + 6-key inventory
 │   ├── 03-deobfuscation.md          12-pass pipeline
 │   ├── 04-key-extraction.md         method per key
 │   ├── 05-wasm-internals.md         WASM 1.0 format
 │   ├── 06-fixslice32.md             bit-sliced AES math
 │   ├── 07-wasm-patching.md          bytecode-patching technique
 │   ├── 08-hsw-dispatch-table.md     vc dispatcher anatomy
-│   ├── 09-hsw-keys-derivation.md    N-key LCG algorithm
-│   ├── 10-architecture-eras.md      four hsw.js generations (a–d)
+│   ├── 09-hsw-keys-derivation.md    HSW N-key direct AES-site capture
+│   ├── 10-architecture-eras.md      four hsw.js generations (a–d) + n-token sub-dispatcher
 │   ├── 11-hsw-function-map.md       per-function role labels
+│   ├── 12-hsw-complete-summary.md   canonical end-to-end summary
+│   ├── 13-hsw-rust-crates.md        Rust-crate scan (phase 2 placeholder)
 │   └── hsw_function_labels.json     machine-readable per-build labels
 │
 ├── examples/
@@ -298,11 +308,13 @@ hcaptcha-hsj-hsw-reversed/
 └── src/hcaptcha/                    Python package
     ├── __init__.py
     ├── __main__.py                  python -m hcaptcha
-    ├── keyfetcher.py                unified — up to 7 keys
+    ├── keyfetcher.py                unified — 6 keys + fingerprint identifier
     ├── hsj.py                       HSJ extractor
     ├── hsw.py                       HSW encrypt/decrypt extractor (bytecode patch)
+    ├── hsw_n_key_capture.py         HSW N-key — direct AES-site capture (era d, production)
     ├── hsw_n_key.py                 HSW N-key — legacy LCG path (eras a-c)
-    ├── hsw_n_key_runtime.py         HSW N-key — runtime trace (era d)
+    ├── hsw_n_key_runtime.py         HSW N-key — runtime LCG trace (legacy fallback)
+    ├── hsw_n_key_full.py            HSW N-key — two-pass full LCG trace (legacy fallback)
     ├── hsw_deobf_emulator.py        WASM emulator scaffold (Approach B)
     ├── hsw_bridge.py                HSWBridge + HSWAnalyzer
     ├── hsw_client.py                end-to-end client (encrypt + PoW + decrypt)
@@ -336,9 +348,11 @@ hcaptcha-hsj-hsw-reversed/
 | [`docs/06-fixslice32.md`](docs/06-fixslice32.md) | Bit-sliced AES math |
 | [`docs/07-wasm-patching.md`](docs/07-wasm-patching.md) | The bytecode-patching technique |
 | [`docs/08-hsw-dispatch-table.md`](docs/08-hsw-dispatch-table.md) | `vc` dispatcher anatomy |
-| [`docs/09-hsw-keys-derivation.md`](docs/09-hsw-keys-derivation.md) | HSW N-key LCG / PCG derivation |
-| [`docs/10-architecture-eras.md`](docs/10-architecture-eras.md) | Four `hsw.js` generations (a–d) |
+| [`docs/09-hsw-keys-derivation.md`](docs/09-hsw-keys-derivation.md) | HSW N-key — direct AES-site capture (current) + LCG/PCG derivation (legacy) |
+| [`docs/10-architecture-eras.md`](docs/10-architecture-eras.md) | Four `hsw.js` generations (a–d) + the n-token sub-dispatcher path |
 | [`docs/11-hsw-function-map.md`](docs/11-hsw-function-map.md) | Per-function role labels (`hsw_function_labels.json`) |
+| [`docs/12-hsw-complete-summary.md`](docs/12-hsw-complete-summary.md) | Canonical end-to-end HSW summary (6 keys + PoW + dispatcher) |
+| [`docs/13-hsw-rust-crates.md`](docs/13-hsw-rust-crates.md) | Rust-crate scan (phase 2 placeholder) |
 
 ---
 

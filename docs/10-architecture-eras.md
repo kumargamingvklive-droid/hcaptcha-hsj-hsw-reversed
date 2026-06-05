@@ -191,6 +191,38 @@ role. The 10 magics documented in
 table. The N-token export (`ec` in the current build) is **separate**
 from `vc` and reachable only from `window.hsw`'s third path.
 
+### Sub-architecture (d.1) — the n-token AES site is its own dispatcher path
+
+`vc` is not a single monolithic dispatcher for all crypto. Call-graph
+BFS over `hsw.wasm` shows that the n-token AES encryption is reached
+via a **distinct sub-path** that does not touch `vc` at all:
+
+```
+window.hsw(jwt)
+  └─ JS-side Promise wrapper
+       └─ ec / pc (the n-token Promise executor exports)
+            └─ ... → fn 548 (wbg-bindgen Promise state machine, ~192 KB body)
+                 └─ AES encrypt entry  (fn 330 / fn 352 — rotates per build)
+                      └─ AES KS  (fn 425 on current build, called 6× per encrypt)
+```
+
+The KS reached from this path (currently `fn 425`, structurally
+matchable by sig `(i32,i32) → ()`, body ≥ 1000 B, ≥ 80 `i32.xor`,
+mask `0x0F000F00`) is **only reachable from `ec`/`pc`**, never from
+`vc`. Conversely the KS reached from `vc` (currently `fn 477`) is the
+`encrypt_req_data` / `decrypt_resp_data` schedule that the
+`encrypt_key` / `decrypt_key` patch targets. So era (d) effectively
+has **two parallel AES key schedules**, sharing the fixslice32
+implementation but routed by independent dispatcher paths.
+
+The n-token AES master key (the `hsw.n_key` we report) is the 32
+bytes at `arg0` of the AES encrypt entry on the second path. The
+extractor identifies that entry structurally — by reachability filter
+(ec-reachable AND NOT vc-reachable) plus the smallest-record-count
+"a0" ring being constant across calls — rather than by hard-coded
+function index. See [`09-hsw-keys-derivation.md`](./09-hsw-keys-derivation.md)
+for the procedure.
+
 ### Identifying era (d) modules
 
 1. There is a single export named `vc` with arity **8**, all
@@ -303,6 +335,7 @@ above.
 | ------------------------------------------------------ | ------------------------------------------------ |
 | Era (d) magic-table details                            | [08-hsw-dispatch-table.md](./08-hsw-dispatch-table.md) |
 | Era (d) AES key extraction (current production)        | [07-wasm-patching.md](./07-wasm-patching.md)     |
-| N-token derivation (independent of dispatch era)       | [09-hsw-keys-derivation.md](./09-hsw-keys-derivation.md) |
+| N-token AES master-key capture (sub-path d.1)          | [09-hsw-keys-derivation.md](./09-hsw-keys-derivation.md) |
+| End-to-end HSW summary (6 keys + PoW + n-token)        | [12-hsw-complete-summary.md](./12-hsw-complete-summary.md) |
 | WASM binary parsing primitives used by all eras        | [05-wasm-internals.md](./05-wasm-internals.md)   |
 | Fixslice32 mask constants the era-detector keys off    | [06-fixslice32.md](./06-fixslice32.md)           |

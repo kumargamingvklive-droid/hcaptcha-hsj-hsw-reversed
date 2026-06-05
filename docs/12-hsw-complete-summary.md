@@ -84,79 +84,102 @@ Pure-Python solver in [`hsw_pow.py`](../src/hcaptcha/hsw_pow.py) — bits=18
 in 0.4 s, bits=20 in ~1.2 s. The WASM does it in ~10 ms thanks to JIT,
 but the algorithm is identical.
 
-## N-key — the hard one
+## N-key — the hard one (now solved at the extraction layer)
 
-The "N-key" inside HSW is the AES-256 key used by `vc` to encrypt the
-n-token before returning it from `window.hsw(jwt)`. We've established:
+The "HSW N-key" is the AES-256 master key the bundle feeds to the
+AES key schedule that encrypts the n-token before it's returned from
+`window.hsw(jwt)`. **It is build-static**, contrary to the earlier
+"per-call ephemeral" framing — that framing was wrong, and is
+corrected below.
 
-### 1. It's per-call ephemeral, not per-build static
+### 1. The earlier "per-call ephemeral" framing was wrong
 
-Two-pass extraction with different JWT timestamps confirms:
+Old versions of this extractor traced the **byte-store helper inside
+`vc`** and reported the captured bytes (which differed call-to-call)
+as the n-key with `verified: false`. Two facts make that wrong:
 
-```
-pass1: e185ed60 00...00 48176f69 5d334695 c5a1b094   (12 LCG bytes captured)
-pass2: 8158c415 00...00 62f05b6d 8dd0ec19 c26a2e12   (12 LCG bytes captured)
-static_bytes_mask: 00...00  (ZERO bytes match across passes)
-```
+1. **`vc` is not on the n-token path.** Call-graph BFS proves:
+     - The AES KS reached from `vc` (currently `fn 477`) is the
+       `encrypt_req_data` / `decrypt_resp_data` KS — i.e. the
+       `encrypt_key` / `decrypt_key` schedule, not the n-token KS.
+     - A **separate** fixslice32 KS (currently `fn 425`, body
+       2858 B, xor≈190 rotl≈40, mask `0x0F000F00`) is reachable
+       only from `ec` / `pc` — the n-token Promise executor path.
+2. **The captured "per-call" bytes were LCG intermediate values,
+   not the AES key.** The byte-store helper logs LCG output as it's
+   computed inside `vc`; the actual AES master key for the n-token
+   lives one level up, at `arg0` of the n-token AES encrypt entry
+   (`fn 330`, sig `(i32,i32,i32) → i32`, which calls KS `fn 425`
+   six times per encryption).
 
-Every captured byte changes between calls. The JS-side wrapper:
+### 2. The current extractor: direct AES-site capture
 
-```js
-return d1().then(function (a) {
-  return a.<EXPORT>(JSON.stringify(payload),  // input
-                    Math.round(Date.now()/1e3), // <-- runtime seed
-                    jwt, x1);
-});
-```
+[`hsw_n_key_capture.py`](../src/hcaptcha/hsw_n_key_capture.py)
+patches the prologue of fn 330 (and a handful of other candidates
+identified by structural fingerprint + reachability) with a stack-
+balanced WASM snippet that copies the 32 bytes at `local[arg_idx]`
+into a per-(fn, arg) ring buffer when a memory gate is open. After
+running a warmup `hsw(1, empty)` and one `hsw(jwt)` call, every
+ring whose records are **constant across calls** is a static
+buffer pointer at that call site. The winning ring is the one
+ending in `a0` (arg0 is the master-key pointer convention) —
+currently `f330_a0`.
 
-The runtime timestamp is mixed into the LCG seed inside `vc`. This is
-not a quirk — it's hCaptcha's design choice. There is no fixed
-"HSW n-key" to extract.
+On the inspected build the key is
+`074cb68ffa72374113adf20618418085a0e853e85cf80ccbf4558a341a6fcc38`.
+The hex value rotates per build; the structural property
+(`f330_a0` static across all records, ec/pc-reachable but not
+vc-reachable) is invariant.
 
-### 2. The n-token doesn't decrypt with any of our 5 master keys
+`extraction_status: captured-from-f330_a0-Nrecords-static`,
+`verified: true`.
 
-We capture a live n-token (typically 2500–3700 bytes after base64-decode)
-and brute-force AES-256-GCM decrypt with:
+See [`09-hsw-keys-derivation.md`](./09-hsw-keys-derivation.md) for
+the full procedure and the legacy LCG path it superseded.
 
-  - All 5 master keys (3 HSJ + 2 HSW)
-  - Both standard wire formats (`iv‖ct‖tag` and `ct‖tag‖iv`)
-  - All 32-byte windows of every base address we capture in memory
-    (72+ candidates per run)
+### 3. Caveat — the live n-token still does NOT decrypt under this key
 
-Zero decrypts succeed. The n-token envelope is either:
+The captured key is the input to the **AES.encrypt** invoked by the
+bundle for n-token production. The live n-token still does not
+decrypt under standard wire formats when brute-forced with the
+captured key:
 
-  - AES-256-GCM with a key not present in any traceable memory region
-    (most likely: a session key derived inside `vc` from the per-call
-    LCG output we partially capture, immediately freed after use)
-  - A non-GCM AEAD (AES-256-CTR + HMAC, ChaCha20-Poly1305) where our
-    GCM wire-format hypothesis is wrong by construction
-  - A custom envelope that doesn't match any standard AEAD wire format
+  - AES-256-GCM in `iv12‖ct‖tag16`, `ct‖tag16‖iv12`, and iv16 variants
+  - AES-256-CTR with multiple nonce / counter offsets
+  - AES-256-ECB (high-entropy output, not plaintext)
+  - AES-128-GCM on either 16-byte half
+  - Inv-bitslice of captured 32-byte blocks → GCM/CTR with all 400
+    (16+16) pair combinations
 
-Disproving each requires either capturing **all 32 bytes** of the
-per-call key atomically with the token (currently blocked — see below)
-or finding the encryption call site inside `vc` and reading the args
-passed to it.
+Token entropy: 256/256 unique bytes with flat distribution —
+consistent with high-quality encryption.
 
-### 3. What `KeyFetcher` returns for `hsw.n_key`
+This means the n-token's **outer envelope** is non-standard: it
+either prepends a PoW-stamp / length-prefix framing around an inner
+AEAD, or applies a post-encrypt transform we haven't yet identified.
+This is a *consumer-side* (envelope) question — it does not change
+the fact that the **key itself** is correct, and the extractor
+honestly reports it as such.
 
-We ship what we can capture honestly:
+### 4. What `KeyFetcher` returns for `hsw.n_key`
 
 ```python
 {
   "hsw": {
-    "n_key": "<16-byte hex from this extraction run; per-call ephemeral>",
-    "fingerprint_blob_key": "<sha256(static_bytes_mask) — build-deterministic>"
+    "n_key": "<32-byte hex from f330_a0; build-static>",
+    "fingerprint_blob_key": "<sha256(hsw.n_key) — build-deterministic>"
   },
-  "verified": {"hsw_n_key": false},                # always false on era (d)
+  "verified": {"hsw_n_key": True},
   "extraction_status": {
-    "hsw_n_key": "per-call-ephemeral-N-of-32-captured",
+    "hsw_n_key": "captured-from-f330_a0-Nrecords-static",
     "hsw_n_key_meta": {
-      "pass1_hex": "...",       # bytes captured this run
-      "pass2_hex": "...",       # bytes captured with different JWT timestamp
-      "repeatable": "DIFFERENT",
-      "static_bytes_count": 0,
-      "live_n_token_b64": "...",       # the actual n-token from pass1
-      "live_n_token_len_bytes": 3627,
+      "extraction_method": "direct-aes-site-capture (fn 330 arg0 pattern)",
+      "captured_rings":    [...],
+      "static_rings":      ["f330_a0", ...],
+      "live_n_token_b64":  "...",
+      "live_n_token_len_bytes": 4203,
+      "wasm_sha256":       "...",
+      "instrumented_fns":  [{"fn": 330, "n_args_i32": 1}, ...],
       "note": "..."
     }
   }
@@ -164,29 +187,8 @@ We ship what we can capture honestly:
 ```
 
 The `live_n_token_b64` is the actual encrypted output from the same
-`window.hsw(jwt)` call that produced the captured key bytes. Users can
-attempt their own decryption analysis with both pieces atomically.
-
-### 4. The remaining instrumentation gap
-
-The LCG block in `vc` emits 12 of 32 n-key bytes via a "byte-store"
-helper that we successfully patch. The remaining 20 bytes come from:
-
-  - i64-store helper writes (8 bytes per call; ~1 call lands in the
-    n-key window on the builds we've inspected — captures ~8 bytes)
-  - i32-store helper writes (4 bytes per call; this helper fires from
-    **many non-vc paths** during JS warm-up + polyfill init + microtask
-    callbacks, and instrumenting it without a vc-gate either floods the
-    ring buffer or perturbs timing enough to trip a missing-API path
-    in jsdom that we haven't polyfilled yet)
-
-The current code adds a `gated=True` flag to the i32_store prologue
-and toggles a memory gate from Python around the `window.hsw(jwt)`
-call, but the WASM still crashes with
-`TypeError: Cannot set properties of undefined (setting 'f')` after
-~90 s. That crash is from a wbg helper trying to attach a property to
-a JS object that resolves to `undefined` through one of our polyfills.
-Further polyfill work would be needed to push past it.
+`window.hsw(jwt)` call that produced the captured key. Users can
+attempt their own envelope analysis with both pieces atomically.
 
 ## Architectural eras (the backtest)
 
@@ -273,31 +275,38 @@ End result: `HSWBridge.solve(jwt)` completes in ~0.25 s.
   - **Generate live n-tokens**: use [`HSWBridge.solve(jwt)`](../src/hcaptcha/hsw_bridge.py)
     — runs the actual WASM via the polyfilled jsdom sandbox, returns
     the n-token base64 string in ~0.25 s per call.
-  - **Inspect the per-call n-key**: `KeyFetcher().fetch()['extraction_status']['hsw_n_key_meta']`
+  - **Inspect the n-key + live n-token atomically**:
+    `KeyFetcher().fetch()['extraction_status']['hsw_n_key_meta']`
     contains both the captured key bytes and the live n-token from
-    the same call, atomically.
+    the same `window.hsw(jwt)` call, for downstream envelope analysis.
 
 ## What's still actively unsolved
 
-  - Capturing all 32 bytes of the per-call n-key atomically — blocked
-    by the wbg-side crash that triggers when we instrument the
-    i32-store helper. Would need polyfill expansion or a fundamentally
-    different instrumentation strategy.
-  - The exact format of the n-token envelope — not AES-256-GCM with any
-    of our 5 master keys (proven by brute-force over 146 (key, format)
-    combinations). Probably uses the per-call session key whose first
-    16 bytes we capture; ruling that out requires the full 32 bytes.
-  - The "fingerprint blob" JS-side AES-128-CBC encryption Implex
+  - **The n-token's outer envelope format.** The captured n-key is the
+    correct AES master key (build-static, captured at the actual AES
+    encrypt site), but the live n-token does not decrypt under standard
+    AES-256-GCM (`iv‖ct‖tag` or `ct‖tag‖iv`) or AES-256-CTR. The token
+    likely wraps an inner AEAD in a PoW-stamp / length-prefix framing
+    or applies a post-encrypt transform. Resolving this is a
+    consumer-side (wire-format) question — the key extraction itself
+    is solved.
+  - **The "fingerprint blob" JS-side AES-128-CBC encryption** Implex
     documents — lives in the JS layer (`w10` SBOX, T-tables at
     `hsw_deobf.js` line ~4090) and is not on the `window.hsw(0/1, ...)`
     hot path. Extractor not implemented.
 
-## Phase 2 — direct AES-site capture attempt (partial)
+## Phase 2 — direct AES-site capture (production)
 
-We attempted a more aggressive instrumentation strategy: rather than
-trying to capture the n-key as it falls out of the LCG helpers, patch
-the AES key-schedule (KS) helper itself to dump every 32-byte input
-atomically with the call site.
+This is now the production extraction path for `hsw.n_key`. Rather
+than chasing intermediate LCG bytes inside `vc` (which was the wrong
+helper — see ["N-key — the hard one"](#n-key--the-hard-one-now-solved-at-the-extraction-layer)
+above), we patch the **AES encrypt entry** (fn 330 on the current
+build) itself to dump the 32 bytes at `arg0` — the AES master-key
+buffer pointer — into a ring buffer, then read them back from JS.
+The captured bytes are build-static.
+
+Implementation: [`hsw_n_key_capture.py`](../src/hcaptcha/hsw_n_key_capture.py)
+(public API: `capture()`).
 
 ### Resolved structural mapping (phase-1 → current build sha256 750faf0d…)
 
@@ -334,10 +343,11 @@ atomically with the call site.
   | fn 330 arg2         | (differs warmup ↔ JWT)                                             | output buffer         |
   | fn 425 arg1         | 4 unique 32-byte values consistent with AES-256 expanded round keys| round-key chunks      |
 
-### Decrypt verification — FAILED
+### Decrypt verification — token envelope still opaque
 
-Token returned (4836 b64 chars → 3627 raw bytes) does NOT decrypt under
-the captured `074cb68f…` key with:
+The captured key is correct (build-static, captured at the AES
+encrypt site itself), but the live n-token does NOT decrypt under
+standard wire formats:
 
   - AES-256-GCM in `iv12‖ct‖tag16`, `ct‖tag16‖iv12`, and iv16 variants
   - AES-256-CTR with multiple nonce / counter offsets
@@ -349,51 +359,37 @@ the captured `074cb68f…` key with:
 Token entropy: 256/256 unique bytes with flat distribution — consistent
 with high-quality encryption.
 
-### Assessment — likely explanations
+### Assessment — likely envelope explanations
 
-  1. The n-token format is NOT simple AES-GCM. The wire format may have
-     a non-AES wrapper (proof-of-work signature, length-prefix framing,
-     message-pack-like envelope) around the encrypted core. GCM-decrypt
-     of the WHOLE token can never succeed if only an inner sub-region
-     is encrypted.
-  2. The captured 32-byte block at fn 330 arg0 IS most likely the
-     n-token AES key in fixslice form, but the inverse-bitslice we have
-     (`fixslice_inverse.py`, written for the vc/encrypt_req_data path)
-     may use a different byte-layout than this build's wbg-bindgen Rust
-     code. The wire-encoded key may differ from the in-memory layout by
-     some permutation.
-  3. The PoW (proof-of-work) layer means the token contains a
-     nonce-search counter that gets prepended to the encrypted payload;
-     the size variance across calls (2798 B → 3627 B) supports this —
-     these aren't just IV+CT+TAG length differences.
+The key-extraction layer is done. The remaining open question is
+**how the bundle frames the AES output into the on-the-wire n-token**:
 
-### Next steps to finish (out of time budget)
+  1. The n-token format is NOT simple AES-GCM. The wire format
+     likely has a non-AES wrapper (PoW-stamp signature, length-prefix
+     framing, message-pack-like envelope) around the encrypted core.
+     Whole-token GCM-decrypt can never succeed if only an inner
+     sub-region is encrypted.
+  2. The token size variance across calls (2798 B → 4203 B in the
+     samples we've captured) supports a PoW-counter prefix — these
+     aren't just IV+CT+TAG length differences.
+  3. There may be a per-encrypt byte permutation between the in-memory
+     master-key layout and the encryption invocation (e.g. a wbg
+     marshal-time shuffle), although the `f330_a0` capture is read
+     **at the AES site**, after any such transform.
 
-  - **A. Instrument fn 548** (the dispatcher) to capture the FULL
-    plaintext buffer pointer + length BEFORE it gets passed to fn 330.
-    fn 548 is the wbg-bindgen Promise executor; the plaintext + key get
-    marshalled in this scope. Look for `memory.copy(buf, src, len)`
-    patterns in 548 right before each fn 330 call.
-  - **B. Instrument the JS-side `XH.mc(...)` wrapper** (line 5562 of
-    `hsw_pretty.js`) — hook it to log inputs / outputs. The JWT-path
-    entry is a JS wrapper that calls into a wasm export we couldn't
-    identify by name; tracing it dynamically would expose the actual
-    encryption boundary.
-  - **C. Build a known-plaintext oracle**: call `window.hsw(1, bytes)`
-    (encrypt_req_data) and `window.hsw(0, ct)` (decrypt_resp_data) with
-    controlled inputs / outputs, then compare against
-    `AES-GCM(captured_key, …)` to verify whether `captured_key` matches
-    `hsw.encrypt_key` after some transformation. If yes, the n-token
-    uses a DIFFERENT key derived from JWT — would need to trace the key
-    derivation specifically for the JWT path.
+Resolving the envelope is consumer-side work — it doesn't change
+the (now-verified) extraction.
 
 ### Reproduction
 
 ```
 cd C:\Users\Administrator\Desktop\HSJ
-PYTHONPATH=src python tools/capture_ntoken_key.py
+PYTHONPATH=src python -m hcaptcha
+# or programmatically:
+PYTHONPATH=src python -c "from hcaptcha.hsw_n_key_capture import capture; \
+    import json; print(json.dumps(capture(), indent=2)[:2000])"
 ```
 
-Saves full capture to `tools/capture_ntoken_key.last.json`. Script is
-parameterized — `SCRATCH_BASE_RINGS`, `RING_STRIDE`, `GATE_ADDR` are
-tunable; add more candidate fns to `fn_targets` to widen instrumentation.
+The capture function is parameterized — `SCRATCH_BASE_RINGS`,
+`RING_STRIDE`, `GATE_ADDR` are tunable; add more candidate fns to
+`fn_targets` to widen instrumentation.

@@ -154,23 +154,53 @@ inline, which is how the N-key derivation site is located.
 
 ### `aes_key_schedule` — fixslice32 key expansions
 
-Each direction (encrypt / decrypt) uses a separate key-schedule
-function, plus inner helpers shared between rounds.
+Era (d) builds carry **two** distinct production AES key schedules,
+one per dispatcher path:
 
-| func | sig                  | body  | callers | callees |
-| ---: | -------------------- | ----: | ------: | ------: |
-|  345 | `(i32,i32)->()`      |  4178 |       1 |       7 |
-|  304 | `(i32,i32)->()`      |  3156 |       2 |       5 |
-|  586 | `(i32,i32)->()`      |  3152 |       1 |       5 |
-|  282 | `(i32,i32)->()`      |  2869 |       2 |       5 |
-|  263 | `(i32)->()`          |   624 |       2 |       2 |
-|  533 | `(i32)->()`          |   608 |       2 |       2 |
+| Role label                              | Reachability                              | Patched by                                  |
+| --------------------------------------- | ----------------------------------------- | ------------------------------------------- |
+| `aes_key_schedule` (vc / req-resp path) | reachable from `vc`                       | [`hsw.py`](../src/hcaptcha/hsw.py) — for `encrypt_key`/`decrypt_key` |
+| `aes_key_schedule (n-token)`            | reachable from `ec`/`pc`, **not** from `vc` | indirectly via [`hsw_n_key_capture.py`](../src/hcaptcha/hsw_n_key_capture.py) (we patch its **caller** fn 330 / 352, not the KS itself) |
 
-In the current build, `func 587` is the production encrypt+decrypt
-key schedule (this is what `hsw.py` patches with the 8-call
-deobf-write injection). It is in the call graph reachable from `vc`
-through both magics; the other key-schedule functions handle internal
-rekey paths or test variants.
+The KS candidates in this build (sig `(i32,i32) → ()`, fixslice
+mask density ≥ 3):
+
+| func | sig                  | body  | callers | callees | refined role                       |
+| ---: | -------------------- | ----: | ------: | ------: | ---------------------------------- |
+|  345 | `(i32,i32)->()`      |  4178 |       1 |       7 | `aes_key_schedule`                 |
+|  304 | `(i32,i32)->()`      |  3156 |       2 |       5 | `aes_key_schedule`                 |
+|  586 | `(i32,i32)->()`      |  3152 |       1 |       5 | `aes_key_schedule`                 |
+|  282 | `(i32,i32)->()`      |  2869 |       2 |       5 | `aes_key_schedule`                 |
+|  263 | `(i32)->()`          |   624 |       2 |       2 | `aes_key_schedule`                 |
+|  533 | `(i32)->()`          |   608 |       2 |       2 | `aes_key_schedule`                 |
+| **425** | `(i32,i32)->()`   |  2858 |       — |       — | **`aes_key_schedule (n-token)`** — phase-1 equiv of fn 282; reached from `ec`/`pc` only; called 6× by the n-token encrypt entry |
+| **477** | (other sig)       |   —   |       — |       — | KS reached only from `vc` — the request/response (encrypt_req_data / decrypt_resp_data) schedule |
+
+`func 587` is the production encrypt+decrypt key schedule on the
+`vc` path (this is what `hsw.py` patches with the 8-call deobf-write
+injection). **`fn 425` is the parallel n-token AES KS** on the `ec`/`pc`
+path; the key being scheduled there is the `hsw.n_key` we report.
+
+### `n_token_aes_encrypt_entry` — the n-token AES caller
+
+Distinct from the KS labels above, the build also exposes a function
+whose role is "the AES encrypt entry the n-token path invokes" —
+i.e. the function whose `arg0` is the AES master-key buffer pointer.
+Its index rotates per build (`fn 330` and `fn 352` on consecutive
+builds we've observed). Structural fingerprint:
+
+| Property            | Value                                            |
+| ------------------- | ------------------------------------------------ |
+| Refined role label  | `n_token_aes_encrypt_entry`                      |
+| Signature           | `(i32,i32,i32) → i32`                            |
+| Body size           | ~3 KB                                            |
+| Calls               | The n-token AES KS (`fn 425`) 6× per invocation  |
+| Reachable from      | `ec` / `pc` (n-token Promise executor path)      |
+| NOT reachable from  | `vc`                                             |
+| arg0 semantics      | Pointer to a 32-byte AES master-key buffer       |
+
+[`hsw_n_key_capture.py`](../src/hcaptcha/hsw_n_key_capture.py) patches
+this function's prologue to dump arg0 — the result is `hsw.n_key`.
 
 ### `aes_round` — bitsliced round transforms
 
@@ -288,11 +318,20 @@ Cross-referencing the labels with the extractor source code:
 * `hcaptcha.hsw._find_deobf_helper` → **func 398** (the (i32,i32)→i32
   callee most frequently invoked from the key schedule).
 * `hcaptcha.hsw_n_key_runtime._find_vc` → **func 593** (same as
-  dispatcher).
+  dispatcher; legacy fallback path).
 * `hcaptcha.hsw_n_key_runtime._find_byte_store_helper` → **func 340**
   (the (i32,i32,i32)→() callee that fires right after each LCG
-  multiplier inside vc, marked here as `unknown` because the
-  classifier doesn't have a "byte-store" category yet).
+  multiplier inside vc; **legacy fallback path** — the bytes it
+  captures are LCG intermediate state, not the AES master key).
+* `hcaptcha.hsw_n_key_capture._find_ks_candidates` → returns
+  **{282, 304, 345, 425, 477, 520, 586}** filtered by reachability
+  to the ec/pc-only set (currently `{425}` on this build), i.e. the
+  **n-token AES KS** (`aes_key_schedule (n-token)`).
+* `hcaptcha.hsw_n_key_capture.capture` instruments **fn 330** (the
+  `n_token_aes_encrypt_entry` on this build — rotates) plus the KS
+  candidates, dumps `arg0` of each, and picks the ring whose bytes
+  are constant across all calls. That ring is `f330_a0` /
+  `f352_a0` / etc. — the rotating index of the n-token AES caller.
 
 The function indices rotate every build. The labels file is
 regenerated per build by `tools/build_hsw_function_labels.py`; the

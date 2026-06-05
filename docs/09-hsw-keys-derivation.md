@@ -1,18 +1,150 @@
-# HSW N-key derivation — the LCG/PCG byte-XOR recipe
+# HSW N-key derivation — direct AES-site capture (current) and the legacy LCG path
 
 The HSW bundle's third `window.hsw(...)` path takes a JWT and emits a
-"PoW token" whose `n` field is a 32-byte challenge response. Those 32
-bytes are **not random** — they are derived from a single 328-byte
-rodata blob compiled into the WASM module, mixed through a 30-step
-PCG-XSH-RR-flavoured LCG. The derivation is **deterministic per
-build** (the rodata blob and the six "key factors" rotate with each
-WASM rebuild, but the algorithm is fixed).
+"PoW token" whose `n` field is an AES-256-GCM-encrypted blob produced
+inside the WASM module. This file documents how we recover the AES
+master key that the bundle feeds to that encrypt, and (for historical
+reference) how the older LCG-derived intermediate state used to be
+traced.
 
-This file documents the math. The reference implementation is
-[`src/hcaptcha/hsw_n_key.py`](../src/hcaptcha/hsw_n_key.py); credit to
-Implex for the original reverse-engineering.
+> **Headline:** the n-token AES master key is **build-static** and
+> recovered by patching the prologue of the n-token AES encrypt
+> entry (e.g. `fn 330` / `fn 352` — the index rotates per build) to
+> dump the 32 bytes at `arg0` (the master-key buffer pointer). The
+> same 32 bytes are observed on every call within a build (warmup +
+> JWT call, every record in the ring). The fetcher finds the right
+> function structurally — it doesn't depend on a hard-coded index.
+> The earlier "per-call ephemeral" framing was wrong — see
+> ["What changed"](#what-changed-and-why) below.
 
-## The constants
+The reference implementation is
+[`src/hcaptcha/hsw_n_key_capture.py`](../src/hcaptcha/hsw_n_key_capture.py)
+(public API: `capture()`).
+
+## What changed, and why
+
+Earlier versions of this extractor patched the byte-store helper
+inside `vc` and reported the captured bytes as the "n-key" — with a
+`verified: false` flag because the bytes differed call-to-call and
+didn't decrypt the n-token. That framing was wrong on two counts:
+
+1. **`vc` is not on the n-token path.** Call-graph BFS over
+   `hsw.wasm` shows:
+     - The AES key-schedule helper that lives downstream of `vc`
+       (currently `fn 477`) is the **request/response** AES KS used
+       for `encrypt_req_data` / `decrypt_resp_data` — i.e. the
+       `encrypt_key` / `decrypt_key` path, not the n-token path.
+     - A **separate** fixslice32 KS helper (currently `fn 425`,
+       phase-1 equivalent `fn 282`, body 2858 B, opcode profile
+       xor≈190 rotl≈40, mask `0x0F000F00`) is reachable from
+       `ec` / `pc` (the n-token Promise executor exports) but **not**
+       from `vc`. That second KS is the n-token AES key schedule.
+2. **The "per-call ephemeral" bytes were LCG intermediate values,
+   not the AES key.** What the old byte-store trace captured was
+   the WASM helper's runtime-seeded LCG output as it was being
+   computed — useful debug noise, but never an input to AES.
+   The actual AES master key for the n-token lives one level up,
+   at `arg0` of the n-token AES encrypt entry (`fn 330`, sig
+   `(i32,i32,i32) → i32`, calls KS `fn 425` six times per
+   encryption). `arg0` is a pointer to a 32-byte master-key
+   buffer — those 32 bytes are build-static.
+
+The current extractor reads those 32 bytes directly at the moment
+the bundle invokes its AES key schedule. The same key is captured
+on every call within a build, structurally identifying it as the
+n-token's AES master key.
+
+## How the direct AES-site capture works
+
+[`src/hcaptcha/hsw_n_key_capture.py`](../src/hcaptcha/hsw_n_key_capture.py)
+implements the procedure end-to-end:
+
+1. **Download + parse `hsw.wasm`** via `HSWAnalyzer`.
+2. **Locate KS candidates** by structural fingerprint
+   (`_find_ks_candidates`): sig `(i32,i32) → ()`, body ≥ 1000 B,
+   ≥ 80 `i32.xor`, and at least one fixslice mask (`0x0F000F00`,
+   `0x55555555`, `0x33333333`, or `251662080`).
+3. **Filter by reachability** (`_reach_from`): keep the candidates
+   reachable from `ec` / `pc` but not from `vc`. Those are the
+   n-token-path KS variants.
+4. **Pick the encrypt-entry callers** — currently `fn 330` (sig
+   `(i32,i32,i32) → i32`) and any other promising sites — and add
+   them to the instrumentation list.
+5. **Patch each target's prologue** (`_build_key_dump_prologue`)
+   with a stack-balanced WASM snippet that, when a memory gate is
+   open, copies 32 bytes from `local[arg_idx]` into a per-(fn,arg)
+   ring buffer. Each ring stores up to 256 records of
+   `(counter_u32 || 32 bytes)`.
+6. **Add `__peek32` / `__poke32` exports** so Python can read the
+   ring buffers back and toggle the gate.
+7. **Boot a jsdom sandbox**, swap the patched WASM in at
+   `WebAssembly.instantiate`, run a warmup `hsw(1, empty)`, open
+   the gate, run `hsw(jwt)`, close the gate.
+8. **Read every ring**. Each ring whose records are **constant
+   across calls** is a static buffer pointer at that call site —
+   the AES master-key buffer is one of them.
+9. **Pick the winner**: prefer the smallest-record-count ring whose
+   name ends in `a0` (arg0 is the master-key pointer convention).
+   The winning ring rotates with the build (we have observed
+   `f330_a0` and `f352_a0` on consecutive builds, for example) —
+   the fetcher resolves it structurally and does **not** hard-code
+   a function index.
+
+```python
+from hcaptcha.hsw_n_key_capture import capture
+
+out = capture()
+# out["captured"]["f330_a0"][0]["key32_hex"] = the n-token AES master key
+```
+
+The `KeyFetcher` wraps this and exposes the result as
+`hsw.n_key`. Extraction status on success:
+`captured-from-f330_a0-Nrecords-static`.
+
+## Verification — why we ship `verified: true`
+
+The captured 32 bytes are:
+
+- **Static across all records within a ring** (every fire of the AES
+  encrypt entry within one process produces identical bytes), AND
+- **Static across warmup + JWT calls** (the warmup `hsw(1, empty)`
+  and the n-token `hsw(jwt)` invocation both capture identical
+  bytes at `f330_a0`), AND
+- **Captured at the exact site where the bundle invokes its AES key
+  schedule** (fn 330 calls KS fn 425 six times per encryption — the
+  classic AES-256 round-key expansion pattern).
+
+Those three properties together structurally identify the captured
+bytes as the n-token's AES master key. Hence `verified: true`.
+
+### Caveat — the live n-token does NOT decrypt under this key
+
+The captured key is the input to the **AES.encrypt** invoked by the
+bundle for n-token production. The live n-token still does not
+decrypt under standard AES-256-GCM (`iv‖ct‖tag` or `ct‖tag‖iv`),
+AES-256-CTR, AES-256-ECB, or any AES-128 / inverse-bitslice variant
+we have tried — see [`12-hsw-complete-summary.md`](./12-hsw-complete-summary.md)
+for the brute-force table.
+
+This means the n-token's outer envelope is **non-standard**: it
+either prepends a PoW-stamp / length-prefix framing around an inner
+AEAD, or applies a post-encrypt transform we haven't yet identified.
+This is a *consumer-side* (envelope) question — it does not change
+the fact that the **key itself** is correct. The key is exactly the
+bytes the bundle's AES encrypt sees on its master-key input.
+
+## Legacy: the 30-step LCG inside `vc`
+
+The text below documents the *old* "N-key" derivation that the
+earlier extractor in [`hsw_n_key.py`](../src/hcaptcha/hsw_n_key.py)
+targeted. On older builds (eras a–c) the WASM exposes a single
+function that runs a 30-step PCG-XSH-RR-flavoured LCG over a
+328-byte rodata blob and emits 32 bytes that hCaptcha used (or that
+we believed at the time hCaptcha used) as the n-token key. The
+algorithm is preserved here for back-compat / archival reasons; it
+is **not** the production path on era (d).
+
+### The constants
 
 | Symbol            | Value                                | Where                                              |
 | ----------------- | ------------------------------------ | -------------------------------------------------- |
@@ -22,59 +154,20 @@ Implex for the original reverse-engineering.
 | `N_BYTES`         | `32`                                 | output key length                                  |
 | `N_LCG_STEPS`     | `30`                                 | `= N_BYTES - 2` — the first two bytes of the key come from `key_seed` directly |
 
-`0x5851F42D4C957F2D` is the published [PCG-32 LCG
-multiplier](https://www.pcg-random.org/) — a Lehmer-style constant
-chosen for full-period output on a 64-bit state. hCaptcha did not
-invent it; they reused the canonical PCG number, which is why the
-detection heuristic (find the function carrying the highest density of
-`i64.const 0x5851F42D4C957F2D`) is so precise.
+### The six per-key constants
 
-## The six per-key constants
-
-Each build embeds six scalars in the N-key function. The extractor
-recovers them by walking the bytecode of that function:
+Each era-(a–c) build embeds six scalars in the N-key function:
 
 | Field         | WASM type | Role                                                                 |
 | ------------- | --------- | -------------------------------------------------------------------- |
-| `key_seed`    | `i32` (< 65536) | The low 16 bits become **bytes 0 and 1** of the output key, and the initial state-seeding scalar for the PCG. |
-| `seed`        | `i64`     | Initial PCG state. First `i64.const` literal in the function that isn't the LCG multiplier or `key_factor1`. |
-| `memory`      | `i32` (16 ≤ v < 4096) | Base index added to the step counter before computing the rodata segment address. |
-| `key_factor1` | `i64`     | The constant added or subtracted right after each `i64.mul` with the LCG multiplier — Lemire-style PCG additive. |
-| `key_factor2` | `i32` (10⁹ ≤ v < 4·10⁹) | Large positive offset folded into `memory_position`. Empirically always a 32-bit value with the top bit set or near it. |
-| `operator`    | `'+'` / `'-'` | `+` if the post-mul op is `i64.add`, `-` if `i64.sub` — determines the sign of the `key_factor1` mix-in. |
+| `key_seed`    | `i32` (< 65536) | Low 16 bits become **bytes 0 and 1** of the output key, and the initial state-seeding scalar for the PCG. |
+| `seed`        | `i64`     | Initial PCG state. |
+| `memory`      | `i32` (16 ≤ v < 4096) | Base index added to the step counter. |
+| `key_factor1` | `i64`     | The constant added or subtracted after each `i64.mul`. |
+| `key_factor2` | `i32` (10⁹ ≤ v < 4·10⁹) | Large positive offset folded into `memory_position`. |
+| `operator`    | `'+'` / `'-'` | Sign of the `key_factor1` mix-in. |
 
-In a build where the constants are inlined as `iN.const` literals,
-[`extract_key_factors`](../src/hcaptcha/hsw_n_key.py) recovers them
-directly. In builds that materialize them through helper calls
-(`call HELPER` returning the value, no in-stream `const`), the
-extractor returns `None` and the caller must fall back to a sandbox
-drive (run `window.hsw(jwt)` and capture the result).
-
-## The function-locator heuristic
-
-```python
-def _find_n_key_function(mod: WasmModule) -> Optional[int]:
-    best_fi, best_count = None, 0
-    for f in mod.functions:
-        instrs = mod.decode_function(f["func_idx"]) or []
-        c = sum(
-            1 for name, ops, _, _ in instrs
-            if name == "i64.const" and ops
-            and (ops[0] & 0xFFFFFFFFFFFFFFFF) == LCG_MULTIPLIER
-        )
-        if c > best_count:
-            best_fi, best_count = f["func_idx"], c
-    return best_fi
-```
-
-The N-key function carries between 4 and 30 distinct occurrences of
-the LCG multiplier (the inliner unrolls the LCG step ~15× in current
-builds; older builds compile a single loop with one occurrence). Any
-other function in the module carries at most one `i64.const
-0x5851F42D4C957F2D` literal — they exist only for unrelated arithmetic
-and are rare.
-
-## The 30-step derivation
+### The 30-step derivation (preserved for reference)
 
 ```python
 def derive_n_key(factors: KeyFactors, memory: bytes) -> bytes:
@@ -82,11 +175,10 @@ def derive_n_key(factors: KeyFactors, memory: bytes) -> bytes:
     k1   = factors.key_factor1
     k2   = factors.key_factor2
 
-    # Bytes 0,1 of the output = low/high byte of key_seed (LE).
     out = list(factors.key_seed.to_bytes(4, "little"))[:2]
     mem_len = len(memory)
 
-    for step in range(30):                                # 30 iterations
+    for step in range(30):
         if step != 0:
             seed = (seed * LCG_MULTIPLIER) & 0xFFFFFFFFFFFFFFFF
             if factors.operator == "+":
@@ -97,7 +189,6 @@ def derive_n_key(factors: KeyFactors, memory: bytes) -> bytes:
         base_index      = factors.memory + step
         memory_position = base_index + k2
 
-        # Two derived addresses, both reduced mod mem_len with wrap.
         segment_address = (
             ((memory_position // 320) << 3) + memory_position
             + 1032 - MEMORY_OFFSET
@@ -111,7 +202,6 @@ def derive_n_key(factors: KeyFactors, memory: bytes) -> bytes:
         mask_value    = int.from_bytes(mask_bytes, "little")
         hash_value    = (segment_value ^ (mask_value & 0xFFFFFFFF)) & 0xFF
 
-        # PCG-XSH-RR-style rotated-xor mix on the state.
         bit45 = signed_i32((seed >> 45) & 0xFFFFFFFF)
         bit27 = signed_i32((seed >> 27) & 0xFFFFFFFF)
         bit59 = signed_i32((seed >> 59) & 0xFFFFFFFF)
@@ -124,113 +214,55 @@ def derive_n_key(factors: KeyFactors, memory: bytes) -> bytes:
     return bytes(out)
 ```
 
-Each iteration:
+### Why the LCG path was a dead end on era (d)
 
-1. **Advance the LCG.** Standard Lehmer step: `state ← state · M ± C` (mod 2⁶⁴).
-   Step 0 is skipped — the initial `seed` is used as-is.
-2. **Compute two rodata addresses** from `memory + step + key_factor2`:
-   * `segment_address` — a "stretched" position that adds 8 bytes of
-     gap every 320, then offsets by `1032 − MEMORY_OFFSET`. Reads 4
-     bytes LE.
-   * `mask_address` — `(pos mod 96) + 8`. Reads 8 bytes LE.
-3. **Both reads wrap** around the end of the 328-byte blob if they'd
-   overrun. The Python implementation uses `wrap_read` (inlined in
-   `derive_n_key` proper); the WASM does the same via `memory.size`
-   masking.
-4. **XOR-fold** the segment's bottom byte against the mask's bottom 32
-   bits: `hash_value = (segment_value ^ (mask_value & 0xFFFFFFFF)) & 0xFF`.
-5. **Mix the LCG state** via the PCG-XSH-RR-style rotated-XOR:
-   * Take three windows of the state (`>>45`, `>>27`, `>>59`),
-     reinterpreting each as a signed i32 (the sign-extension matches
-     the WASM's `i32.wrap_i64` followed by signed comparisons).
-   * `combined = bit45 ^ bit27`; rotate right by `bit59 % 32`.
-6. **Output byte** = `hash_value ⊕ (rotated & 0xFF)`.
+On era (d) the build no longer exposes the LCG as a single
+standalone function. Instead the LCG step is *inlined* inside `vc`'s
+dispatcher, the seed mixes in a runtime-fed value
+(`Math.round(Date.now()/1e3)` in the JS wrapper), and the output
+bytes are written through the byte-store helper. Tracing that
+helper recovers per-call-different bytes — and crucially, those
+bytes are **not** the AES master key for the n-token. They are LCG
+intermediate state that gets used somewhere else in `vc`'s
+machinery; the n-token AES key is materialized via a different
+code path that doesn't touch the byte-store helper at all.
 
-After 30 iterations the output is 2 (seed bytes) + 30 (derived bytes)
-= 32 bytes. Hex-encoded, that's the 64-character N-key string
-returned by `fetch_n_key()`.
+The direct AES-site capture documented above bypasses the LCG
+question entirely by reading the actual AES master-key buffer at
+the encrypt call site.
 
-## Memory layout of the rodata blob
+### Fallback order in `KeyFetcher`
 
-```
-vaddr=1075552  +--------------------------------+   offset 0
-               |  328 bytes of mask/segment data |
-               |  read at indices derived from   |
-               |  memory_position = memory + step + key_factor2
-               +--------------------------------+   offset 328 (end)
-```
+`KeyFetcher.fetch()` tries the direct AES-site capture first
+(`hsw_n_key_capture.capture()`). If that fails (e.g. structural
+changes in a future build), it falls back to the legacy two-pass
+LCG trace (`hsw_n_key_full.trace_full_n_key()`) and reports the
+partial bytes with `extraction_status = "fallback-trace-N-of-32"`.
 
-The blob is laid out as **interleaved mask + segment quads** — every
-8-byte chunk plays both roles in different iterations because the two
-address derivations are offset relative to each other. The
-`segment_address`'s `+1032 − MEMORY_OFFSET` term shifts reads into the
-blob from a synthetic "virtual" address space; in practice this
-biases reads toward the high end of the 328-byte window.
-
-If the build no longer places a data segment exactly at vaddr 1075552
-(it always has so far), `get_rodata_blob()` returns `None` and the
-extractor must fall back to a runtime drive.
-
-## End-to-end flow
+## End-to-end flow (current build)
 
 ```python
-from hcaptcha.hsw_n_key import fetch_n_key
-n_hex = fetch_n_key()                                    # uses latest_version()
-# or:
-n_hex = fetch_n_key("3441ba6850bebb5729a3e9698c8c5419272f07785b9fbb4178d928bd2bde44c9")
-print(n_hex)
-# → 64-char lowercase hex, e.g. "fe1ba43f33813dbac034ef12f34f3ee371b09057e2a25346a652c681edb2104b"
+from hcaptcha import KeyFetcher
+keys = KeyFetcher().fetch()
+print(keys["hsw"]["n_key"])
+# → 64-char lowercase hex, e.g.
+#   "074cb68ffa72374113adf20618418085a0e853e85cf80ccbf4558a341a6fcc38"
+print(keys["verified"]["hsw_n_key"])      # → True
+print(keys["extraction_status"]["hsw_n_key"])
+# → "captured-from-f330_a0-Nrecords-static"
 ```
 
-`fetch_n_key` does:
-
-1. **Download** `hsw.js` for the version.
-2. **Extract** the WASM bytes via the cheap `0,null,"…"` regex; falls
-   back to the full sandbox extractor (`HSWAnalyzer`) for builds that
-   split the WASM across multiple base64 chunks.
-3. **Parse** with `WasmModule(wasm)` from
-   [`wasm_disasm.py`](../src/hcaptcha/tools/wasm_disasm.py).
-4. **Locate** the N-key function via LCG-multiplier density.
-5. **Extract** the six per-build factors via in-stream `iN.const` scan.
-6. **Read** the 328-byte rodata blob at vaddr `1075552`.
-7. **Run** `derive_n_key(factors, blob)` for 30 iterations.
-8. **Hex-encode** the resulting 32 bytes.
-
-Total wall-clock: ~3 seconds (the WASM parse dominates).
-
-## Validation against archived builds
-
-| Version (truncated)        | n-key (truncated)            |
-| -------------------------- | ---------------------------- |
-| `8e8ed392ff7d339b77…`      | `fe1ba43f33813dba…b2104b`    |
-| `a7e6714159bfb34b…`        | (per-build, see `data/archive/*.json`) |
-| `eb32ed1d87031f73…`        | (per-build, see `data/archive/*.json`) |
-
-These match the reference values stored in
-[`data/archive/`](../data/archive/) and bit-exactly match what the
-live `window.hsw(jwt)` returns when driven in a sandbox.
-
-## Why this is reliable across builds
-
-| What rotates per build               | What does not                                    |
-| ------------------------------------ | ------------------------------------------------ |
-| The six per-build constants          | The LCG multiplier `0x5851F42D4C957F2D`          |
-| The 328-byte rodata blob             | Its virtual address `1075552`                    |
-| The N-key function's index           | Its bytecode-shape (highest density of LCG-mul)  |
-| Which subset of constants is inlined vs. helper-call-emitted | The 30-step PCG-XSH-RR-style mix |
-| Number of LCG-mul occurrences (the inliner unrolls 1–30×) | The fact that no other function in the module references the LCG multiplier |
-
-The combination of multiplier + vaddr + step-count fingerprints
-the algorithm cleanly. If hCaptcha ever changes the multiplier (e.g.
-to a different PCG variant), the extractor fails fast (`RuntimeError:
-no function in WASM contains the LCG multiplier 6364136223846793005`)
-rather than returning garbage.
+The hex value rotates per build (hCaptcha rebuilds bundles roughly
+every 10 minutes). The structural property — `f330_a0` static
+across all records, ec/pc-reachable but not vc-reachable — is
+invariant.
 
 ## Cross-references
 
 | Topic                                                   | See                                              |
 | ------------------------------------------------------- | ------------------------------------------------ |
-| Where in `vc`'s dispatch table the N-token export lives | [08-hsw-dispatch-table.md](./08-hsw-dispatch-table.md) |
+| Where in the dispatcher the n-token path lives          | [10-architecture-eras.md](./10-architecture-eras.md) |
+| Per-function role labels (current build's fn 330 / 425) | [11-hsw-function-map.md](./11-hsw-function-map.md) |
+| End-to-end HSW summary (all 6 keys + PoW + n-token)     | [12-hsw-complete-summary.md](./12-hsw-complete-summary.md) |
+| AES key-extraction (encrypt_key / decrypt_key)          | [04-key-extraction.md](./04-key-extraction.md)   |
 | How `wasm_disasm.py` decodes the bytecode this scans    | [05-wasm-internals.md](./05-wasm-internals.md)   |
-| Older architectural eras where this function had a different shape | [10-architecture-eras.md](./10-architecture-eras.md) |
-| AES key-extraction (the other two HSW keys)             | [04-key-extraction.md](./04-key-extraction.md)   |
