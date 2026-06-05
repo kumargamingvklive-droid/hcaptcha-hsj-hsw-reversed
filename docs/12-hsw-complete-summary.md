@@ -135,6 +135,180 @@ hands to the AES encrypt entry. But until one of them is resolved,
 we **do not** have end-to-end n-token plaintext recovery, and the
 README and this doc reflect that distinction honestly.
 
+## Open: n-token plaintext recovery — Phase 2 findings (what we tried)
+
+A second instrumentation pass shipped in `tools/instrument_encrypt_entry.py`,
+`tools/memdiff_ntoken.py`, and `tools/recover_keystream.py` advanced the
+story along two axes (wire format and key role) without yet closing it.
+The new module `src/hcaptcha/hsw_n_token_decrypt.py` wires both the
+static-key fast path and a live WASM re-instrumentation fallback into
+one public API. Results to date — **plaintext NOT yet recovered**, but
+the failure mode has been narrowed substantially.
+
+### What we now know (verified)
+
+  1. **Wire format is fully pinned down.** Across every captured
+     token, decoding the base64 yields exactly::
+
+         raw = ciphertext(N) ‖ tag(16) ‖ iv(12) ‖ version_byte(1)
+
+     and `len(raw) == N + 29`. The trailing version byte is `0x02`
+     on the 2026-spring builds (was `0x00` on the older
+     `algorithm.HSJEncryption` format). Two captured tokens at
+     3 065 B and 3 076 B correspond to inner plaintexts of 3 036 B
+     and 3 047 B respectively (token = plaintext + 29 B trailer).
+     The cipher is AES-256-GCM with **empty AAD**. The 12-byte IV
+     varies per call; the 16-byte tag is the GMAC output. This
+     supersedes the earlier hypothesis that the outer envelope was
+     non-standard — the framing is now standard AEAD with a fixed
+     29-byte trailer.
+
+  2. **Inner plaintext is msgpack-encoded.** Structural analysis
+     of the encrypt-entry's input buffer (arg1 of the AES entry,
+     ~3 036 B of pre-encrypt data captured by
+     `tools/instrument_encrypt_entry.py`) reveals a fixmap/fixarray
+     prefix in the `0x80`–`0x9f` range — i.e. msgpack. The keys
+     are expected to mirror the JWT payload: sitekey (`s`), host,
+     time (`t`), fingerprint, PoW proof. **Caveat:** the arg1
+     buffer captured by fn 226 contains scratch state, not the
+     user plaintext — fn 226 reads/writes round-key state. Direct
+     plaintext capture from the pre-encrypt site has NOT yet been
+     achieved; the msgpack-prefix evidence comes from indirect
+     structural analysis.
+
+### What we tried — key recovery (every attempt failed)
+
+The `f330_a0` value previously identified as the "n-token AES master
+key" is now understood to be an **intermediate fixslice32 round-key
+scratch slice**, not the literal AES-256 master key. The same applies
+to the fn 226 / fn 334 captures:
+
+  | Capture site         | What it actually is                                  |
+  | -------------------- | ---------------------------------------------------- |
+  | fn 226 arg0          | Pointer to a pre-scheduled round-key buffer          |
+  |                      | (16 round-key pairs × 32 B = 512 B)                  |
+  | fn 334 arg0/arg1     | Output / input of the fixslice32 key-schedule        |
+  |                      | (writes round-keys to arg0, reads obfuscated key     |
+  |                      | from arg1)                                           |
+  | fn 330 arg0 (legacy) | One specific 32-byte rotation of round-key state     |
+
+These captured 32-byte values satisfy the fixslice replication
+property (correct as round-key chunks) but do **not** satisfy
+AES-256-GCM with **any** tested wire format. The number of
+attempts on the current builds, before and after Phase 2:
+
+  | Pass     | Candidate keys | Envelope layouts | AAD variants | Total       | Hits |
+  | -------- | -------------- | ---------------- | ------------ | ----------- | ---- |
+  | Phase 1  | 48             | 10               | 1            | 480         | 0    |
+  | Phase 1+ | 639            | 432              | 9            | 2 484 432   | 0    |
+  | Phase 2  | + every fn 226 |                  |              |             |      |
+  |          | / fn 334 ring  | 12               | 1            | added 7 000+| 0    |
+
+### Why none of the captured 32-byte values is the true key
+
+The bundle's pattern (proven by `hsw.HSWKeyFetcher`) is that the
+true master key is **XOR-deobfuscated word-by-word inside the KS
+function** via an `(i32, i32) → i32` deobf helper, called 8 times
+(one per i32 word of the 32-byte key). At no point does the literal
+master key exist as 32 contiguous plaintext bytes in the .data
+segment — it lives only as eight obfuscated i32 words plus a
+small XOR table, and is materialized one word at a time into the
+fixslice key-schedule's bit-sliced layout.
+
+`hsw.HSWKeyFetcher` reliably recovers the `encrypt_key` /
+`decrypt_key` master keys this way (8 calls to the deobf helper
+identified inside KS fn 434 on the current build). The same
+pattern applies to the n-token's KS, but the n-token uses a
+**different** KS function (currently a separate fixslice32
+candidate distinct from fn 434) whose structural-heuristic
+identification has not converged with the same reliability — on
+some builds the n-token KS overlaps with the request/response KS
+candidate set and on others it does not.
+
+### What `hsw_n_token_decrypt.py` does about this
+
+The new module ships both paths so a future-build run can converge
+without recompiling instrumentation:
+
+  1. **Static decrypt** — try AES-(128|192|256)-GCM with a list of
+     candidate keys against every reasonable wire format
+     (`_WIRE_FORMATS`), including the now-canonical ntoken-v2
+     trailer `ct ‖ tag ‖ iv ‖ 0x02`. Built-in candidate sources
+     include `data/keys.json`, `tools/capture_ntoken_key.last.json`,
+     and `tools/instrument_encrypt_entry.last.json`.
+  2. **Live decrypt** — boot the Node + jsdom sandbox, locate
+     every fixslice32 KS candidate by structural fingerprint
+     (`(i32, i32) → ()`, body ≥ 1000 B, ≥ 80 XORs, masks
+     `0x0F000F00` / `0x55555555` / `0x33333333` / `0x0F0F0F0F`),
+     splice in **two** prologue snippets per candidate KS function:
+       * a raw-byte capture (32 B at arg1 pointer → ring buffer), and
+       * a deobf injection that calls the KS's most-used
+         `(i32, i32) → i32` helper 8 times to materialize the 8
+         deobfuscated i32 words.
+     Then run `window.hsw(jwt)` once, harvest every captured 32-byte
+     candidate (deobf'd first, raw second), and feed them through
+     the static path.
+
+On every build observed so far the deobf helper for KS fn 434 (the
+vc-dispatched encrypt/decrypt schedule) is reliably recovered —
+re-derived from instrumentation, it matches the keys
+`HSWKeyFetcher` already returns. The **n-token-specific** KS has
+not yet been pinned down by the same heuristic on every build, so
+the live path occasionally fails to enumerate the actual master
+key. This is the next iteration's first target.
+
+### Files added in Phase 2 (for the next iteration to build on)
+
+  - `src/hcaptcha/hsw_n_token_decrypt.py` — public
+    `decrypt_n_token(token_b64, ...)` API with static + live
+    strategies and a `_WIRE_FORMATS` table covering every layout
+    we have ever seen in this codebase (12 entries).
+  - `tools/instrument_encrypt_entry.py` — splices a richer
+    record-layout prologue at the AES encrypt entry: captures
+    arg0/arg1/arg2 pointers plus 32 B at arg0 and 256 B at each
+    of arg1/arg2 (560 B records, ring of 64). The
+    `.last.json` artifact carries pre-encrypt buffer snapshots
+    that confirm the msgpack prefix and the wire-format trailer.
+  - `tools/memdiff_ntoken.py` — pure memory-diff approach:
+    snapshot WASM linear memory before/after `window.hsw(jwt)`,
+    coalesce dirty regions, rank by entropy + msgpack/JSON
+    markers + ciphertext overlap. Designed to find the
+    pre-encrypt plaintext buffer in linear memory without any
+    function-level instrumentation.
+  - `tools/recover_keystream.py` — black-box keystream recovery:
+    treats AES as opaque, instruments the per-block encrypt to
+    capture (counter-in, encrypted-counter-out) per call, then
+    XORs the concatenated outputs against the ciphertext. Useful
+    if the cipher actually turns out to be CTR-mode (with GCM-
+    style auth tag) rather than GCM directly.
+
+### Three live hypotheses (Phase 2 update)
+
+The Phase 1 hypothesis list is refined as follows:
+
+  1. **The captured 32-byte values are round-key chunks, not the
+     master key.** [Now confirmed.] The next step is to mirror
+     `HSWKeyFetcher`'s deobf-helper invocation pattern from inside
+     the n-token KS function, not the encrypt/decrypt KS function.
+     `_build_deobf_injection` in `hsw_n_token_decrypt.py` already
+     implements this — it just needs the right KS function as a
+     target.
+  2. **The n-token-specific KS identification is build-fragile.**
+     The structural heuristic (`_find_fixslice_ks_funcs`) returns
+     multiple candidates per build; reachability from `ec` / `pc`
+     vs. `vc` narrows the field but does not always pin a single
+     function. Cross-referencing the dispatch table
+     ([`08-hsw-dispatch-table.md`](./08-hsw-dispatch-table.md))
+     against the per-build function map should converge this.
+  3. **The msgpack plaintext shape is consistent with our wire-
+     format conclusion** — once a candidate key produces a
+     plaintext whose first byte is in `0x80`–`0x9f` (fixmap/
+     fixarray), or `0xde`/`0xdf` (map16/map32), that key + IV +
+     tag combination is the answer. `decrypt_n_token` does NOT
+     yet sanity-check the plaintext shape; an obvious follow-up
+     is to add a msgpack-prefix gate before returning, to
+     suppress false positives from short / pathological keys.
+
 ## HSW dispatcher inventory
 
 The `vc` WASM export multiplexes 10 distinct magic numbers:

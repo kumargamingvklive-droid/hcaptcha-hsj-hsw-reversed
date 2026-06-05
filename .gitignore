@@ -205,3 +205,10 @@ tools/capture_ntoken_key.last.json
 # Ephemeral decrypt-investigation artifacts (regenerable by re-running the scripts)
 tools/decrypt_ntoken_v*.last.json
 tools/decrypt_ntoken_v*.run.log
+tools/instrument_encrypt_entry.last.json
+tools/memdiff_ntoken.last.json
+tools/recover_keystream.patched.wasm
+tools/recover_keystream.capture.json
+tools/recover_keystream.analysis.json
+tools/instrument_encrypt_entry.last.json
+tools/memdiff_ntoken.last.json

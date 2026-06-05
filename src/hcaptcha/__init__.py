@@ -20,6 +20,7 @@ from .hsw_client import HSW
 from . import hsw_crypto
 from . import hsw_pow
 from . import hsw_n_key_capture
+from .hsw_n_token_decrypt import decrypt_n_token, NTokenError
 
 __all__ = [
     "KeyFetcher",
@@ -31,5 +32,7 @@ __all__ = [
     "hsw_crypto",
     "hsw_pow",
     "hsw_n_key_capture",
+    "decrypt_n_token",
+    "NTokenError",
 ]
 __version__ = "1.5.0"
