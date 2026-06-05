@@ -201,3 +201,7 @@ tools/capture_ntoken_key.last.json
 /hsj_deobf.blobs.*
 /examples/hsw_deobf.*
 /examples/hsj_deobf.*
+
+# Ephemeral decrypt-investigation artifacts (regenerable by re-running the scripts)
+tools/decrypt_ntoken_v*.last.json
+tools/decrypt_ntoken_v*.run.log

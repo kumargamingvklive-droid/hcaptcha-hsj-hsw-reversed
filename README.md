@@ -2,7 +2,7 @@
 
 <h1>HCAPTCHA HSJ HSW Reversed</h1>
 
-<p><strong>Byte-accurate master-key extraction for hCaptcha's <code>hsj.js</code> and <code>hsw.js</code> — six build-static AES-256 master keys (all verified) plus a per-build fingerprint identifier, in under twenty-five seconds.</strong></p>
+<p><strong>Byte-accurate master-key extraction for hCaptcha's <code>hsj.js</code> and <code>hsw.js</code> — six build-static AES-256 master keys (all extracted; five have end-to-end encrypt→decrypt verification, the sixth is structurally verified at the AES encrypt call site) plus a per-build fingerprint identifier, in under twenty-five seconds.</strong></p>
 
 <p>
   <img src="https://img.shields.io/badge/python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.10+">
@@ -67,15 +67,17 @@ hCaptcha ships two compiled bundles to every browser. Both encrypt their wire tr
 </tbody>
 </table>
 
-This package recovers **six** AES-256 master keys per build, all build-static and all verified, plus a deterministic per-build fingerprint identifier — no candidate-guessing, no hardcoded indices. Every build's `hsw.js` randomises its WASM function indices, magic numbers, locals, and stack offsets; the fetcher locates each piece by structural role.
+This package recovers **six** AES-256 master keys per build, all build-static, plus a deterministic per-build fingerprint identifier — no candidate-guessing, no hardcoded indices. Every build's `hsw.js` randomises its WASM function indices, magic numbers, locals, and stack offsets; the fetcher locates each piece by structural role.
+
+**Verification scope.** Five of the six keys have full end-to-end verification (encrypt → decrypt → match plaintext): the three HSJ keys are bundle-witnessed via AST patch, and `hsw.encrypt_key` / `hsw.decrypt_key` are verified by AES-256-GCM round-trip against the live bundle. The sixth, `hsw.n_key`, is **structurally verified** at the AES encrypt call site (the captured 32 bytes are the same value across every record in the ring and across warmup + JWT calls, read directly from arg0 of the n-token AES encrypt entry), but **end-to-end recovery of the live n-token plaintext under this key remains open** — the wire-format envelope's plaintext-recovery path has not been solved. See [`docs/12-hsw-complete-summary.md`](docs/12-hsw-complete-summary.md) for the precise scope and the remaining open hypotheses.
 
 | Key | Verification |
 | --- | --- |
 | `hsj.n_key` / `response_decrypt_key` / `payload_encrypt_key` | bundle-witnessed via AST patch |
-| `hsw.encrypt_key` | AES-256-GCM round-trip (false-positive rate **2⁻¹²⁸**) |
-| `hsw.decrypt_key` | bundle round-trip via `HSWBridge.decrypt` |
-| `hsw.n_key` | **direct AES-site capture** — 32 bytes read from arg0 of the n-token AES encrypt entry (fn 330 on the current build) at the moment the bundle invokes its AES key schedule. Build-static: identical bytes captured across warmup + JWT calls, identical across every record in the ring (`extraction_status = captured-from-f330_a0-Nrecords-static`). Call-graph BFS proves this site is reachable from `ec`/`pc` (the n-token Promise executor path) but **not** from `vc` (the request/response dispatcher) — structurally identifying it as the n-token's AES master key. |
-| `hsw.fingerprint_blob_key` | `SHA-256(hsw.n_key)` — a deterministic per-build identifier derived from the captured n_key |
+| `hsw.encrypt_key` | end-to-end AES-256-GCM round-trip (false-positive rate **2⁻¹²⁸**) |
+| `hsw.decrypt_key` | end-to-end bundle round-trip via `HSWBridge.decrypt` |
+| `hsw.n_key` | **structural** — 32 bytes read from arg0 of the n-token AES encrypt entry (fn 330 on the current build) at the moment the bundle invokes its AES key schedule. Build-static: identical bytes captured across warmup + JWT calls, identical across every record in the ring (`extraction_status = captured-from-f330_a0-Nrecords-static`). Call-graph BFS proves this site is reachable from `ec`/`pc` (the n-token Promise executor path) but **not** from `vc` (the request/response dispatcher) — structurally identifying it as the n-token's AES master key. **End-to-end plaintext recovery of the live n-token under this key is still open** (see [`docs/12`](docs/12-hsw-complete-summary.md) § "Open: n-token plaintext recovery"). |
+| `hsw.fingerprint_blob_key` | `SHA-256(hsw.n_key)` — deterministic per-build identifier derived from the captured `n_key`. Inherits the `n_key` caveat: structurally derived, not end-to-end verified against any consumer-side output. |
 
 <details>
 <summary><strong>Sample output</strong> (click to expand)</summary>
@@ -115,19 +117,25 @@ This package recovers **six** AES-256 master keys per build, all build-static an
 }
 ```
 
-`hsw.n_key` is now reported `verified: true`: the bytes are read
-directly from the AES master-key buffer (arg0 of the n-token AES
-encrypt entry, fn 330 on the current build) at the moment the bundle
-invokes the AES key schedule, and the same 32 bytes are observed on
-every call within a build (warmup + JWT call), proving the key is
-build-static. Note that this verifies the **extracted key is the input
-to the bundle's AES encryption** — the live n-token still does **not**
-decrypt under standard AES-256-GCM (`iv‖ct‖tag` / `ct‖tag‖iv`) or
-AES-CTR with this key, because the n-token's outer envelope is
-non-standard (likely PoW framing wrapped around an inner AEAD). The
-key itself is correct; the wire-format envelope is a separate,
-consumer-side question still under investigation. See
-[`docs/12-hsw-complete-summary.md`](docs/12-hsw-complete-summary.md).
+`hsw.n_key` is reported `verified: true` in the **structural** sense:
+the bytes are read directly from the AES master-key buffer (arg0 of
+the n-token AES encrypt entry, fn 330 on the current build) at the
+moment the bundle invokes the AES key schedule, and the same 32 bytes
+are observed on every call within a build (warmup + JWT call), proving
+the key is build-static and that it is the value the bundle is feeding
+into its AES encrypt at the n-token site. This is **not** the same as
+end-to-end plaintext recovery. The live n-token does **not** decrypt
+under any AES-GCM wire format we have tried with this key — including
+the user-confirmed HSJ-style trailer `ct(N) ‖ tag(16) ‖ iv(12) ‖ 0x00`
+— so the consumer-side plaintext-recovery path is still open. We
+brute-forced 48 distinct captured 32-byte values × 5 trailer-lengths
+× 2 layouts against the live token and 0 decrypted. Three working
+hypotheses remain (key in fixslice32-bitsliced form needing
+inv-orthogonalize, wrong arg index / wrong KS candidate picked,
+non-trivial outer envelope such as a per-call wrap, length prefix, or
+multi-chunk framing). See
+[`docs/12-hsw-complete-summary.md`](docs/12-hsw-complete-summary.md)
+§ "Open: n-token plaintext recovery" for details.
 
 </details>
 

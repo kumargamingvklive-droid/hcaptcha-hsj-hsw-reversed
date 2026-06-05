@@ -14,27 +14,40 @@ JS-side surface is `window.hsw(...)`, which dispatches three operations:
 | `window.hsw(1, bytes)` | Encrypt request payload                         | AES-256-GCM, fixed key    |
 | `window.hsw(jwt)`      | Build n-token (PoW solution + fingerprint blob) | Hashcash + AES-256, fixed key |
 
-All three are now reversed. The n-token's AES master key is extracted
-directly from the WASM by instrumenting the AES encrypt call site that
-the bundle reaches via the Promise executor (`pc` → 389 → 250 → 548 →
-`fn 330` on the current build). The captured key is build-static
-(same bytes captured every time the AES helper fires within a build).
+The first two are reversed end-to-end (encrypt → decrypt → match).
+The third — the n-token path — is reversed at the **extraction layer**:
+the AES master key the bundle feeds into its n-token AES encrypt is
+extracted directly from the WASM by instrumenting that encrypt call
+site (reached via the Promise executor: `pc` → 389 → 250 → 548 →
+`fn 330` on the current build), and the captured 32 bytes are
+build-static (same value across every record in the ring, across
+warmup + JWT calls). **End-to-end plaintext recovery of the live
+n-token using this key is still open** — see § "Open: n-token plaintext
+recovery" below.
 
 ## Master keys (6 build-static)
 
-| Bundle | Key                       | Verified | Method                                            |
-| ------ | ------------------------- | -------- | ------------------------------------------------- |
-| HSJ    | `n_key`                   | ✅       | AST-patch of the key-schedule stack frame         |
-| HSJ    | `response_decrypt_key`    | ✅       | same                                              |
-| HSJ    | `payload_encrypt_key`     | ✅       | same                                              |
-| HSW    | `encrypt_key`             | ✅       | WASM bytecode patch + AES-256-GCM round-trip      |
-| HSW    | `decrypt_key`             | ✅       | WASM bytecode patch + Python-encrypt/bundle-decrypt|
-| HSW    | `n_key`                   | ✅       | Direct AES-site capture (fn 330 arg0 / `f330_a0`) |
+All six keys are extracted on every build. Five of the six are
+end-to-end verified (encrypt → decrypt → match plaintext). The sixth
+(`hsw.n_key`) is structurally verified at the AES encrypt call site
+but the n-token envelope's plaintext-recovery path is still open
+(see § "Open: n-token plaintext recovery" below).
+
+| Bundle | Key                       | Verification scope                         | Method                                            |
+| ------ | ------------------------- | ------------------------------------------ | ------------------------------------------------- |
+| HSJ    | `n_key`                   | end-to-end (bundle-witnessed)              | AST-patch of the key-schedule stack frame         |
+| HSJ    | `response_decrypt_key`    | end-to-end (bundle-witnessed)              | same                                              |
+| HSJ    | `payload_encrypt_key`     | end-to-end (bundle-witnessed)              | same                                              |
+| HSW    | `encrypt_key`             | end-to-end (AES-256-GCM round-trip)        | WASM bytecode patch + Python-decrypt of bundle output |
+| HSW    | `decrypt_key`             | end-to-end (Python-encrypt + bundle-decrypt) | WASM bytecode patch + `HSWBridge.decrypt` round-trip |
+| HSW    | `n_key`                   | **structural only** (constant at AES-site) | Direct AES-site capture (fn 330 arg0 / `f330_a0`) |
 
 These 6 are returned by `KeyFetcher().fetch()` and rotate per build
 (hCaptcha rebuilds the bundles roughly every 10 minutes). A 7th value
 `hsw.fingerprint_blob_key = sha256(hsw.n_key)` is a deterministic
-derived fingerprint suitable for build identification.
+derived fingerprint suitable for build identification — and **inherits
+the `n_key` caveat** (structurally derived, not end-to-end verified
+against any consumer-side output).
 
 ### How the HSW n_key extractor works
 
@@ -57,6 +70,70 @@ The same 32 bytes are captured on EVERY call within a build (warmup
 On the build inspected: `074cb68ffa72374113adf20618418085a0e853e85cf80ccbf4558a341a6fcc38`.
 
 Implementation: [`src/hcaptcha/hsw_n_key_capture.py`](../src/hcaptcha/hsw_n_key_capture.py).
+
+## Open: n-token plaintext recovery
+
+The above gets us a build-static 32-byte value that is *demonstrably*
+the input to the AES encrypt call the bundle invokes for the n-token
+(arg0 of fn 330, structurally identified as the n-token AES master
+key by ec/pc-reachability and constant-across-records). This is what
+we mean by `verified: true` for `hsw.n_key`: **the extraction itself
+is verified**, in the same sense that we know the bytes are what the
+bundle hands to its AES encrypt entry.
+
+It is **not** the same as recovering plaintext from the live n-token.
+We have not yet been able to decrypt a live n-token using this key
+under any AES-GCM wire format we have tried. Specifically:
+
+  - The user has confirmed the wire format is
+    **`ct(N) ‖ tag(16) ‖ iv(12) ‖ 0x00`** — the same trailer pattern
+    as HSJ (`ct ‖ tag ‖ iv ‖ trailing 0x00 version byte`).
+  - We brute-forced **48 distinct captured 32-byte values × 5
+    trailer-lengths × 2 layouts** against the live token, and **0
+    decrypted**. The 48 candidates include the `f330_a0` master-key
+    value, every `f425_a*` ring (the fixslice32 KS arguments), the
+    `f388_a*` rings, and inv-bitslice transforms of the 32-byte
+    blocks; the 2 layouts include the HSJ-style trailer above and the
+    HSW-style `iv(12) ‖ ct(N) ‖ tag(16)`.
+
+Three working hypotheses for why end-to-end decryption fails despite
+the extracted key being structurally correct:
+
+  1. **Captured key is in fixslice32-bitsliced (orthogonalized) form.**
+     The bundle uses `aes-soft` fixslice32, which internally
+     "orthogonalizes" the round-key state into a bitsliced layout for
+     side-channel resistance. If arg0 of fn 330 is read *after* the
+     orthogonalize step rather than before it, the 32 bytes we capture
+     are the bitslice-form bytes, not the original AES-256 master
+     key. The fix is to apply the documented inverse-orthogonalize
+     transform (see [`tools/fixslice_inverse.py`](../src/hcaptcha/tools/fixslice_inverse.py))
+     to the captured bytes before using them as an AES key. We have
+     not yet conclusively tested this path against the live token.
+  2. **Wrong function argument index, or wrong KS candidate picked.**
+     We assumed the master key lives at `arg0` of fn 330 (the convention
+     for `(key, in, out)` AES encrypt signatures). If the bundle's
+     actual signature is `(state, in, out)` or `(key_schedule, in,
+     out)` then `arg0` is *not* the master key — it's a pointer to
+     pre-expanded round keys, which is a different object. Similarly,
+     of the four structural KS candidates (fn 388, 425, 477, 520) we
+     filtered to two by ec/pc-reachability (388, 425); if the
+     reachability filter is wrong (e.g. we missed a path), the actual
+     n-token KS could be a different one we are not currently
+     instrumenting.
+  3. **Outer envelope is more than just trailer framing.** Even with
+     the correct key in the correct form, the live n-token may wrap
+     an inner AEAD output inside a per-call envelope we are not
+     accounting for — for example, a length-prefixed multi-chunk
+     framing (each AES block its own GCM frame), or a wbg-marshal-time
+     transformation between the in-memory ciphertext and the
+     base64-encoded n-token, or an outer PoW-stamp signature that
+     terminates before the AEAD body begins.
+
+Resolving any of these three is consumer-side / envelope work and
+does not change the fact that the extracted bytes are what the bundle
+hands to the AES encrypt entry. But until one of them is resolved,
+we **do not** have end-to-end n-token plaintext recovery, and the
+README and this doc reflect that distinction honestly.
 
 ## HSW dispatcher inventory
 

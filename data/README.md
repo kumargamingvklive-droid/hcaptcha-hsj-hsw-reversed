@@ -89,10 +89,21 @@ Each JSON file has the same schema returned by `python -m hcaptcha` —
   - **`hsw.fingerprint_blob_key`** — `sha256(hsw.n_key)`. A
     deterministic build identifier suitable for de-duplicating
     sightings of the same build across deployments.
-  - **`verified`** — all four HSW keys are verified on every
-    extraction. HSJ keys are bundle-witnessed (the bundle's own AES
-    output is the witness during AST-patch extraction) so they don't
-    appear in this block.
+  - **`verified`** — verification scope differs by key. `encrypt_key`
+    and `decrypt_key` are **end-to-end verified** (encrypt → decrypt
+    → match plaintext, via AES-256-GCM round-trip against the bundle).
+    `n_key` is **structurally verified**: the captured 32 bytes are
+    constant across every record at the AES encrypt entry's `arg0`
+    (and across warmup + JWT calls), which proves the bytes are what
+    the bundle hands to its n-token AES encrypt — but **end-to-end
+    plaintext recovery of the live n-token under this key is still
+    open** (see [`docs/12`](../docs/12-hsw-complete-summary.md)
+    § "Open: n-token plaintext recovery"). `fingerprint_blob_key` is
+    `sha256(hsw.n_key)` and **inherits the `n_key` caveat** —
+    structurally derived, not end-to-end verified against any
+    consumer-side output. HSJ keys are bundle-witnessed (the bundle's
+    own AES output is the witness during AST-patch extraction) so they
+    don't appear in this block.
   - **`extraction_status.hsw_n_key_meta.live_n_token_b64`** — the
     base64 n-token captured during this extraction run. **Truncated
     in the committed snapshot** so the JSON stays compact; re-run
