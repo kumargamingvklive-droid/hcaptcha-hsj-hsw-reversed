@@ -183,12 +183,6 @@ hsj_b.js
 hsw_b.js
 
 # hCaptcha-specific generated artifacts
-hsw_deobf.js
-hsw_deobf.blobs.bin
-hsw_deobf.blobs.json
-hsj_deobf.js
-hsj_deobf.blobs.bin
-hsj_deobf.blobs.json
 hsw_patched*.wasm
 hsw_master_key*.json
 hcaptcha_master_keys.json

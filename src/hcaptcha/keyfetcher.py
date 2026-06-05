@@ -241,43 +241,20 @@ class KeyFetcher:
         except Exception as e:
             self.log.info(f"direct AES-site capture failed: {e}",
                           start=t0, end=time.time())
-            full = None
 
-        # If direct capture didn't produce a key, fall back to the
-        # legacy two-pass full trace which captures partial bytes.
+        # No fallback path — if direct AES-site capture didn't produce
+        # a key, the build has rotated past the recognition heuristic
+        # and the extractor needs an update. We surface the failure in
+        # extraction_status rather than ship stale "fallback" bytes.
         if hsw_n_key_hex is None:
-            self.log.info("falling back to two-pass full trace...",
-                          start=t0, end=time.time())
-            try:
-                from .hsw_n_key_full import trace_full_n_key
-                full = trace_full_n_key(version=self.version, two_pass=True,
-                                        instrument_i32=False)
-            except Exception:
-                full = None
-
-        # If direct capture AND legacy trace both failed, full is None.
-        # If legacy succeeded as fallback, extract its partial bytes.
-        if hsw_n_key_hex is None and full is not None:
-            hsw_n_key_hex = full.get("full_hex")
-            n_captured = full.get("bytes_captured", 0)
-            hsw_n_key_status = f"fallback-trace-{n_captured}-of-32"
-            hsw_n_key_meta = {
-                "extraction_method": "legacy two-pass trace (fallback)",
-                "bytes_captured": n_captured,
-                "repeatable": full.get("repeatable", "unknown"),
-                "base_ptr": full.get("base_ptr_hex", ""),
-                "note": (
-                    "Direct AES-site capture failed on this build; "
-                    "fell back to the legacy LCG byte-store trace "
-                    "which captures fewer bytes. See "
-                    "hsw_n_key_capture.py and hsw_n_key_full.py."
-                ),
-            }
-            if not hsw_fp_blob_key:
-                h = hashlib.sha256()
-                h.update(bytes.fromhex(hsw_n_key_hex) if hsw_n_key_hex else b"\x00" * 32)
-                hsw_fp_blob_key = h.hexdigest()
-                hsw_fp_blob_meta = {"construction": "sha256(hsw.n_key)"}
+            hsw_n_key_meta.setdefault("note", (
+                "Direct AES-site capture failed on this build; the "
+                "obsolete fallback path (legacy byte-store trace) has "
+                "been removed in 1.5.0. The extractor needs to be "
+                "updated for whatever structural change hCaptcha "
+                "shipped — start by re-running tools/find_ntoken_aes.py "
+                "to locate the new AES encrypt entry."
+            ))
 
         hsw_keys = {
             "encrypt_key":          hsw_out["encrypt_key"],

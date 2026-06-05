@@ -1,0 +1,65 @@
+[
+  {
+    "idx": 0,
+    "line": 13904,
+    "byteOffset": 0,
+    "byteLength": 628,
+    "bytesHexHead": "4142434445464748494a4b4c4d4e4f505152535455565758"
+  },
+  {
+    "idx": 1,
+    "line": 13904,
+    "byteOffset": 628,
+    "byteLength": 24869,
+    "bytesHexHead": "0f00000000000000010000001c0000000f00000000000000"
+  },
+  {
+    "idx": 2,
+    "line": 13904,
+    "byteOffset": 25497,
+    "byteLength": 3623,
+    "bytesHexHead": "6465736372697074696f6e28292069732064657072656361"
+  },
+  {
+    "idx": 3,
+    "line": 13904,
+    "byteOffset": 29120,
+    "byteLength": 261,
+    "bytesHexHead": "ffffffffffffffffffffffffffffffffffffffffffffffff"
+  },
+  {
+    "idx": 4,
+    "line": 13904,
+    "byteOffset": 29381,
+    "byteLength": 5457,
+    "bytesHexHead": "209a99999999999999999999999999991915ae47e17a14ae"
+  },
+  {
+    "idx": 5,
+    "line": 13904,
+    "byteOffset": 34838,
+    "byteLength": 5569,
+    "bytesHexHead": "92d54d06cff010000000000000000080f64ae1c7022d1500"
+  },
+  {
+    "idx": 6,
+    "line": 13904,
+    "byteOffset": 40407,
+    "byteLength": 700,
+    "bytesHexHead": "017c2e985b87d3be729fd9d8872f1512c650de6b706e4acf"
+  },
+  {
+    "idx": 7,
+    "line": 13904,
+    "byteOffset": 41107,
+    "byteLength": 1166,
+    "bytesHexHead": "10a5d4e8e8ff0c0000000000000062acc5eb78ad03001400"
+  },
+  {
+    "idx": 8,
+    "line": 13904,
+    "byteOffset": 42273,
+    "byteLength": 14944,
+    "bytesHexHead": "0601010301040205070702080809020a050b020e04100111"
+  }
+]

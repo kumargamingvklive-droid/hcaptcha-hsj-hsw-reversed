@@ -215,7 +215,7 @@ Stable structural properties:
    as an in-stream `i64.const` literal — see
    [09-hsw-keys-derivation.md](./09-hsw-keys-derivation.md). This is
    the same multiplier `_find_n_key_function` in
-   [`hsw_n_key.py`](../src/hcaptcha/hsw_n_key.py) keys off.
+   [`hsw_n_key_capture.py`](../src/hcaptcha/hsw_n_key_capture.py) keys off.
 3. It always reads the rodata blob at vaddr **1075552**.
 
 Combining (2) and (3) gives a 100%-precise identifier independent of

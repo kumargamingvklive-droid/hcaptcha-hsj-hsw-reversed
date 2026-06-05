@@ -1,29 +1,16 @@
 """hCaptcha hsj/hsw master-key extraction + pure-Python crypto + PoW.
 
-Public surface (current era (d) builds):
+Public surface:
 
-  * KeyFetcher().fetch() — single call, returns up to 7 keys (3 HSJ,
-    4 HSW: encrypt, decrypt, n_key partial, fingerprint_blob_key).
+  * KeyFetcher().fetch() — single call, returns 6 build-static
+    verified AES-256 master keys (3 HSJ + 3 HSW) plus a derived
+    7th fingerprint identifier.
   * HSJKeyFetcher, HSWKeyFetcher — direct per-bundle extractors.
   * HSWBridge, HSWAnalyzer, HSW — bundle wrappers + analyzer.
-  * hsw_crypto, hsw_pow — pure-Python crypto + Hashcash PoW.
-
-Opt-in N-key derivation modules (advanced; usually invoked via
-KeyFetcher.fetch() automatically):
-
-  * hsw_n_key          — legacy LCG-based N-key derivation for
-                         archived builds (eras a-c). Raises on era (d)
-                         where constants are emitted by a deobf helper.
-                         See docs/09 and docs/10.
-  * hsw_n_key_runtime  — APPROACH A: runtime trace of the byte-store
-                         helper inside vc that emits the LCG-derived
-                         N-key bytes. Recovers a partial N-key on era
-                         (d) builds (12 contiguous bytes on the
-                         currently inspected build).
-  * hsw_deobf_emulator — APPROACH B: pure-Python WASM emulator covering
-                         the opcode subset used by the deobf helpers.
-                         Scaffolded for any future build that returns
-                         to a fully build-static N-key derivation.
+  * hsw_crypto, hsw_pow — pure-Python AES-GCM + Hashcash PoW.
+  * hsw_n_key_capture — the working n_token AES key extractor used
+    by KeyFetcher. Patches the AES encrypt call site (fn arg0) and
+    captures the master key at the moment the bundle uses it.
 """
 from .keyfetcher import KeyFetcher
 from .hsj import HSJKeyFetcher
@@ -32,12 +19,7 @@ from .hsw_bridge import HSWBridge, HSWAnalyzer
 from .hsw_client import HSW
 from . import hsw_crypto
 from . import hsw_pow
-# N-key extractors (see module docstrings for build-era applicability):
-from . import hsw_n_key
-from . import hsw_n_key_runtime
-from . import hsw_n_key_full
-from . import hsw_n_key_capture          # FINAL extractor: direct AES-site capture
-from . import hsw_deobf_emulator
+from . import hsw_n_key_capture
 
 __all__ = [
     "KeyFetcher",
@@ -48,10 +30,6 @@ __all__ = [
     "HSW",
     "hsw_crypto",
     "hsw_pow",
-    "hsw_n_key",
-    "hsw_n_key_runtime",
-    "hsw_n_key_full",
     "hsw_n_key_capture",
-    "hsw_deobf_emulator",
 ]
 __version__ = "1.5.0"

@@ -203,7 +203,7 @@ We tested the modern extractor against 12 archived HSW bundles
 | (d) | current (1.41+)       | `vc` + magic multiplex        | ✅                      |
 
 Every era needs its own extractor strategy. We ship the era (d) one in
-`hsw.py` + `hsw_n_key_full.py`. The structural identification works on
+`hsw.py` + `hsw_n_key_capture.py`. The structural identification works on
 all 12 archive bundles (fixslice key-schedule candidates are findable)
 but the magic-dispatcher heuristic doesn't apply pre-era-(d).
 

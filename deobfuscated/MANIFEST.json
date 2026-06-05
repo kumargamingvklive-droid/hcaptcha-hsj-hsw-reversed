@@ -1,0 +1,11 @@
+{
+  "build_hash": "022108385d4f66d4a4a3f2842ff476a39f9f414c68e21f1a1a3d72b1a25954e4",
+  "hsw_deobf_js": {
+    "size_bytes": 250698,
+    "sha256": "d8efc8489e82fdfe883b9b1eb7f9a65285989fea1b65f520fcb5f8f41d144a8e"
+  },
+  "hsj_deobf_js": {
+    "size_bytes": 1634970,
+    "sha256": "389a288a87b8cadecfa1e82d94264c247ca0f61ec24831608cbd3a3ae790b00f"
+  }
+}

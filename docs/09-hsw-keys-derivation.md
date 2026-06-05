@@ -136,7 +136,7 @@ bytes the bundle's AES encrypt sees on its master-key input.
 ## Legacy: the 30-step LCG inside `vc`
 
 The text below documents the *old* "N-key" derivation that the
-earlier extractor in [`hsw_n_key.py`](../src/hcaptcha/hsw_n_key.py)
+earlier extractor in [`hsw_n_key_capture.py`](../src/hcaptcha/hsw_n_key_capture.py)
 targeted. On older builds (eras a–c) the WASM exposes a single
 function that runs a 30-step PCG-XSH-RR-flavoured LCG over a
 328-byte rodata blob and emits 32 bytes that hCaptcha used (or that
@@ -236,7 +236,7 @@ the encrypt call site.
 `KeyFetcher.fetch()` tries the direct AES-site capture first
 (`hsw_n_key_capture.capture()`). If that fails (e.g. structural
 changes in a future build), it falls back to the legacy two-pass
-LCG trace (`hsw_n_key_full.trace_full_n_key()`) and reports the
+LCG trace (`hsw_n_key_capture.capture()`) and reports the
 partial bytes with `extraction_status = "fallback-trace-N-of-32"`.
 
 ## End-to-end flow (current build)

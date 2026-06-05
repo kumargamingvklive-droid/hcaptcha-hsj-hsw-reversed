@@ -72,7 +72,7 @@ byte against the rotating key before storing into a scratch buffer. Any
 function carrying ≥2 of these constants inline is at compile-time
 inlined a decryption pad — so the function's body literally exposes the
 deobf key, no runtime tracing needed. This is the leverage that
-`hcaptcha.hsw_deobf_emulator` uses.
+the deobf helpers use.
 
 ### `runtime_string_io` — the universal helpers
 
@@ -317,9 +317,9 @@ Cross-referencing the labels with the extractor source code:
   fixslice-mask + signature filter).
 * `hcaptcha.hsw._find_deobf_helper` → **func 398** (the (i32,i32)→i32
   callee most frequently invoked from the key schedule).
-* `hcaptcha.hsw_n_key_runtime._find_vc` → **func 593** (same as
+* `hcaptcha.hsw_n_key_capture` `_find_vc` → **func 593** (same as
   dispatcher; legacy fallback path).
-* `hcaptcha.hsw_n_key_runtime._find_byte_store_helper` → **func 340**
+* `hcaptcha.hsw_n_key_capture` `_find_byte_store_helper` → **func 340**
   (the (i32,i32,i32)→() callee that fires right after each LCG
   multiplier inside vc; **legacy fallback path** — the bytes it
   captures are LCG intermediate state, not the AES master key).

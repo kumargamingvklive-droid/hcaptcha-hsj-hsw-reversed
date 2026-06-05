@@ -203,7 +203,6 @@ sequenceDiagram
 | HSJ extraction | `hcaptcha.hsj` | 3 AES-256 keys (AST patch on the key schedule) |
 | HSW extraction | `hcaptcha.hsw` | 2 AES-256 keys (WASM bytecode patch on the key schedule) |
 | HSW N-key capture | `hcaptcha.hsw_n_key_capture` | 1 AES-256 key (direct capture at the n-token AES encrypt entry, build-static) |
-| HSW N-key legacy fallback | `hcaptcha.hsw_n_key_runtime` / `hsw_n_key` | partial / full N-key via LCG trace (used only if direct capture fails) |
 | Unified entry | `hcaptcha.keyfetcher` | All 6 keys + fingerprint identifier + cipher / wire metadata + extraction_status |
 
 **HSJ — AST patching.** `hsj.js` keeps its AES keys in a JS-managed `Int8Array` heap. The key schedule always allocates a 480-byte stack frame with the 32-byte master key at offset 0. We AST-patch that prologue to copy those 32 bytes into a JS array each time it fires, then drive the three entry points.
@@ -244,9 +243,7 @@ The Python package exposes four classes. Import what you need.
 | `KeyFetcher().fetch()` | All 6 keys + fingerprint identifier + metadata + extraction_status | Most users — single call |
 | `HSJKeyFetcher().fetch_keys()` | 3 HSJ keys | HSJ-only workloads |
 | `HSWKeyFetcher().fetch()` | 2 HSW keys (encrypt/decrypt) + verification | HSW-only workloads |
-| `hsw_n_key_capture.capture()` | HSW N-key + ring captures + live n-token | Direct AES-site capture (current era-d builds) |
-| `hsw_n_key_runtime.trace_n_key()` | partial HSW N-key LCG trace | Legacy fallback if direct capture fails |
-| `hsw_n_key.fetch_n_key()` | full HSW N-key from rodata | Legacy era (a–c) builds |
+| `hsw_n_key_capture.capture()` | HSW N-key + ring captures + live n-token | Direct AES-site capture (current builds) |
 | `HSWBridge()` | Encrypt / decrypt / solve as a service | Black-box wire-compatible traffic |
 
 Each key works as a standard AES-256-GCM key with any library:
@@ -311,11 +308,7 @@ hcaptcha-hsj-hsw-reversed/
     ├── keyfetcher.py                unified — 6 keys + fingerprint identifier
     ├── hsj.py                       HSJ extractor
     ├── hsw.py                       HSW encrypt/decrypt extractor (bytecode patch)
-    ├── hsw_n_key_capture.py         HSW N-key — direct AES-site capture (era d, production)
-    ├── hsw_n_key.py                 HSW N-key — legacy LCG path (eras a-c)
-    ├── hsw_n_key_runtime.py         HSW N-key — runtime LCG trace (legacy fallback)
-    ├── hsw_n_key_full.py            HSW N-key — two-pass full LCG trace (legacy fallback)
-    ├── hsw_deobf_emulator.py        WASM emulator scaffold (Approach B)
+    ├── hsw_n_key_capture.py         HSW N-key — direct AES-site capture (the working extractor)
     ├── hsw_bridge.py                HSWBridge + HSWAnalyzer
     ├── hsw_client.py                end-to-end client (encrypt + PoW + decrypt)
     ├── hsw_crypto.py                pure-Python AES-256-GCM crypto
@@ -352,7 +345,31 @@ hcaptcha-hsj-hsw-reversed/
 | [`docs/10-architecture-eras.md`](docs/10-architecture-eras.md) | Four `hsw.js` generations (a–d) + the n-token sub-dispatcher path |
 | [`docs/11-hsw-function-map.md`](docs/11-hsw-function-map.md) | Per-function role labels (`hsw_function_labels.json`) |
 | [`docs/12-hsw-complete-summary.md`](docs/12-hsw-complete-summary.md) | Canonical end-to-end HSW summary (6 keys + PoW + dispatcher) |
-| [`docs/13-hsw-rust-crates.md`](docs/13-hsw-rust-crates.md) | Rust-crate scan (phase 2 placeholder) |
+| [`docs/13-hsw-rust-crates.md`](docs/13-hsw-rust-crates.md) | Rust-crate inventory + complete XOR-keys & obfuscation-constants reference |
+| [`deobfuscated/`](deobfuscated/) | Frozen, fully-deobfuscated HSW + HSJ JS bundles + the extracted WASM blob (regenerable via `tools/deobf.py`) |
+
+---
+
+## Credits
+
+This project builds on the public reverse-engineering work of **[Implex-ltd/hcaptcha-reverse](https://github.com/Implex-ltd/hcaptcha-reverse)** (2023). Their write-up of the hCaptcha 1.40.x bundle pinned the Rust crate graph (`aes 0.7.5`, `ctr 0.8.0`, `cipher 0.3.0`, `rand_chacha 0.2.2`, `twox-hash 1.6.0`, `rust-hashcash 0.3.3`, `js-sys 0.3.52`), the wire format used by `encrypt_req_data` / `decrypt_resp_data`, the LCG-based N-key derivation algorithm, and the existence of a separate fingerprint-blob encryption layer.
+
+Specifically, this work would not have reached its current state without:
+
+- **Crate inventory** — Implex's documented dependency graph for `1.40.x` is the baseline that [`docs/13-hsw-rust-crates.md`](docs/13-hsw-rust-crates.md) cross-references against the current build's magic-constant fingerprints. Where their version pins match our constant evidence, we inherit the minor version.
+- **PoW algorithm** — Implex first identified that HSW's stamp uses `rust-hashcash 0.3.3` (with the `sha1` feature, not the default SHA-3). [`hsw_pow.py`](src/hcaptcha/hsw_pow.py) implements the same algorithm in pure Python.
+- **AES wire format** — Implex's [`encryptions/main.py`](https://github.com/Implex-ltd/hcaptcha-reverse/blob/main/encryptions/main.py) documents the `ct ‖ tag(16) ‖ iv(12) ‖ 0x00` framing for the HSJ side, and [`encryptions/request.py`](https://github.com/Implex-ltd/hcaptcha-reverse/blob/main/encryptions/request.py) the `iv(12) ‖ ct ‖ tag(16)` framing for HSW — both of which we verified end-to-end and now ship pure-Python implementations of.
+- **LCG-based N-key algorithm** — Implex's [`encryptions/fetcher.py`](https://github.com/Implex-ltd/hcaptcha-reverse/blob/main/encryptions/fetcher.py) describes the PCG-XSH-RR-flavoured 30-step derivation from a per-build `key_seed` + `key_factor1` + `key_factor2` + `memory` blob. We used this as the starting hypothesis for the N-key path before discovering (via call-graph BFS) that current builds route around it through a separate Promise-executor path — see [`docs/09-hsw-keys-derivation.md`](docs/09-hsw-keys-derivation.md).
+
+Differences from Implex's work:
+
+- This project ships a working extractor for **current** builds (era d, `vc` magic-multiplex dispatcher + separate `ec`/`pc` Promise executor for the n-token path), not just builds 1.39.0 – 1.40.34.
+- N-key extraction is via **direct AES-call-site instrumentation** (patch `fn 330`'s prologue, dump `arg0`) rather than static LCG derivation from rodata.
+- Adds pure-Python implementations of every algorithm (AES-256-GCM crypto, Hashcash PoW solver, fingerprint hashing) instead of relying on running the WASM.
+- Adds a `sandbox_polyfill.js` (29 jsdom API gaps) that makes `window.hsw(jwt)` complete in pure Node without a real browser.
+- Adds a complete function map (594/594 functions labeled — see [`docs/11`](docs/11-hsw-function-map.md)) and a comprehensive XOR-keys / obfuscation-constants inventory (see [`docs/13`](docs/13-hsw-rust-crates.md)).
+
+Implex deserves full credit for the original protocol-level reversing work; this project extends and modernizes it for current production hCaptcha bundles.
 
 ---
 
