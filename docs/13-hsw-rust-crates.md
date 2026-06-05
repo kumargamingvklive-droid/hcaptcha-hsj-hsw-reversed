@@ -123,6 +123,144 @@ What rotates per ~10-minute rebuild is:
 The crate graph itself, and therefore the algorithm choices, are
 **build-invariant**.
 
+## XOR keys and obfuscation constants (complete inventory)
+
+hCaptcha layers TWO levels of compile-time string/rodata obfuscation
+on top of the stock Rust+wasm-bindgen output. Each level uses its own
+XOR-key pool. Every value below ROTATES per build — only the **count**
+and **structural role** stay invariant. The values quoted here are
+samples from two specific builds; the methodology in
+[`tools/refine_hsw_labels.py`](../tools/refine_hsw_labels.py) re-derives
+them dynamically on any build.
+
+### 1. Build-time obfuscation pair (the high-occurrence XOR mask)
+
+Two i32 constants embedded as `i32.const` literals in nearly every
+function in the WASM. They appear with EQUAL occurrence counts —
+classic XOR-decryption pair (one is the pad, the other the
+inverse/modular complement). These are emitted by hCaptcha's
+build-time obfuscator that runs after `wasm-opt -Oz`.
+
+| Build              | Constant 1     | Constant 2     | Occurrences each | Distinct funcs |
+| ------------------ | -------------- | -------------- | ---------------- | -------------- |
+| Build `750faf0d…`  | `0x4B4529C7`   | `0xF847A8D2`   | 2259             | many           |
+| Build `8d181839…`  | `0x6683AC90`   | `0x01763D17`   | 1448             | 128            |
+
+Note: `0x4B4529C7 XOR 0xF847A8D2 = 0xB3028115`, and
+`0x6683AC90 XOR 0x01763D17 = 0x67F59187` — no obvious relationship
+between the two builds' pairs. They are FRESH per build.
+
+### 2. Inline deobf-consumer XOR keys (compile-time pads)
+
+A second pool of 3-6 i32 constants per build, embedded inline by
+each function that reads from a `data` segment that the obfuscator
+encrypted. These are the compile-time pads the deobf consumer XORs
+the encrypted blob bytes against to recover the plaintext rodata.
+139 functions in build `750faf0d…` (the "deobf_consumer" role —
+see [`docs/11-hsw-function-map.md`](./11-hsw-function-map.md))
+carry at least two of these keys.
+
+| Build              | XOR pad keys                                                                     |
+| ------------------ | -------------------------------------------------------------------------------- |
+| Build `750faf0d…`  | `0x69169F2B`, `0xBD31F8F6`, `0xFB42E581`, `0x8304F247`, `0x77782831`, `0xE586D82B` |
+| Build `8d181839…`  | `0x116FCB42` (in 143 funcs), `0x6683AC90` + `0x01763D17` (128 funcs each — note these are SHARED with set 1 on this build, suggesting builds are consolidating the two pools) |
+
+The 6-key set in build `750faf0d…` partitions into:
+
+  - **96-bit triple** for large blob decoding: `0x69169F2B`, `0xBD31F8F6`, `0xFB42E581`
+  - **64-bit pair** for smaller blobs:          `0x8304F247`, `0x77782831`
+  - **single-word key**, rotates with offset:   `0xE586D82B`
+
+### 3. AES fixslice32 bit-permutation masks (NOT XOR keys)
+
+These are XORed against the AES state during bit-sliced ShiftRows /
+SubBytes / MixColumns, but they are **algorithm constants** (part of
+the `aes 0.7.x` crate's fixslice32 implementation), not obfuscation
+XOR keys. They are constant across all builds and across all hCaptcha
+versions that ship the `aes` crate at version 0.7.x:
+
+| Constant      | Role                                  |
+| ------------- | ------------------------------------- |
+| `0x55555555`  | fixslice bit-permute (low bits)       |
+| `0x33333333`  | fixslice bit-permute (mid bits)       |
+| `0x0F0F0F0F`  | fixslice bit-permute (high nibbles)   |
+| `0xF0F0F0F0`  | fixslice bit-permute (low nibbles)    |
+| `0x03030303`  | inv-ShiftRows row-3 helper            |
+| `0xFCFCFCFC`  | inv-ShiftRows row-3 helper            |
+| `0xC0C0C0C0`  | inv-ShiftRows row-3 helper            |
+| `0x33003300`  | fixslice ShiftRows column shuffle     |
+| `0x030F0C00`  | fixslice ShiftRows column shuffle     |
+| `0x0F000F00`  | fixslice ShiftRows column shuffle     |
+| `0x0C0F0300`  | fixslice ShiftRows column shuffle     |
+
+Listed here for completeness only — these aren't XOR keys you can
+use to decrypt anything; they're internal AES round constants.
+
+### 4. Hash / RNG algorithm constants (also NOT XOR keys)
+
+For full disclosure, these appear in the WASM and participate in XOR
+operations but are stock algorithm constants, not obfuscation pads:
+
+| Constant                          | Algorithm                | Role                          |
+| --------------------------------- | ------------------------ | ----------------------------- |
+| `0x9E3779B185EBCA87`              | XxHash3 PRIME64\_1       | mix multiplier                |
+| `0xC2B2AE3D27D4EB4F`              | XxHash3 PRIME64\_2       | mix multiplier                |
+| `0x165667B19E3779F9`              | XxHash3 PRIME64\_3       | mix multiplier                |
+| `0x27D4EB2F165667C5`              | XxHash3 PRIME64\_5       | mix multiplier                |
+| `0x5A827999`                      | SHA-1 K0                 | round constant (rounds 0–19)  |
+| `0x6ED9EBA1`                      | SHA-1 K1                 | round constant (rounds 20–39) |
+| `0x70E44324`, `0x359D3E2A`        | SHA-1 K2/K3 (computed)   | derived at runtime — K2 and K3 are NOT embedded as direct literals |
+| `0x5851F42D4C957F2D`              | PCG / rand\_pcg          | LCG multiplier                |
+| `0x61707865`, `0x3320646E`,        | ChaCha20 "expand 32-byte k" sigma words (`expa`, `nd 3`, `2-by`, `te k`) |
+| `0x79622D32`, `0x6B206574`        |                          |                               |
+
+### 5. Bonus: the embedded SipHash default key
+
+The ASCII string `"somepseudorandomlygeneratedbytes"` (32 bytes) is
+embedded as four `i64.const` literals in two functions (typical
+`ahash::fallback::FALLBACK_KEYS` shape or Rust std's `RandomState`
+default-when-no-getrandom path):
+
+```
+0x736F6D6570736575   "somepseu"
+0x646F72616E646F6D   "dorandom"
+0x6C7967656E657261   "lygenera"
+0x7465646279746573   "tedbytes"
+```
+
+These are **hardcoded by ahash / std**, not by hCaptcha — they're
+the public default SipHash key for HashMap entropy and have no role
+in the live key material.
+
+### Re-derive the obfuscation XOR keys on any build
+
+Use the snippet in [`tools/refine_hsw_labels.py`](../tools/refine_hsw_labels.py)
+(constants `DEOBF_KEYS` near the top). Or run this directly:
+
+```python
+from collections import defaultdict
+from hcaptcha.tools.wasm_disasm import WasmModule
+from hcaptcha import version as v
+from hcaptcha.hsw_bridge import HSWAnalyzer
+
+mod = WasmModule(bytes.fromhex(HSWAnalyzer(v.latest_version()).analyze()["wasm_bytes_hex"]))
+per_const_funcs = defaultdict(set)
+for f in mod.functions:
+    if f["func_idx"] < len(mod.imports): continue
+    for n, ops, _, _ in (mod.decode_function(f["func_idx"]) or []):
+        if n == "i32.const" and ops:
+            val = ops[0] & 0xFFFFFFFF
+            if val > 0x10000:
+                per_const_funcs[val].add(f["func_idx"])
+
+# Inline XOR pads = consts appearing in 30+ distinct functions, not AES masks
+AES = {0x55555555, 0x33333333, 0x0F0F0F0F, 0xF0F0F0F0,
+       0x33003300, 0x030F0C00, 0x0F000F00, 0x0C0F0300}
+for val, fns in sorted(per_const_funcs.items(), key=lambda x: -len(x[1])):
+    if val in AES or len(fns) < 30: continue
+    print(f"  0x{val:08x}  {len(fns)} distinct funcs")
+```
+
 ## How to verify
 
 All evidence in this document is reproducible from a single
