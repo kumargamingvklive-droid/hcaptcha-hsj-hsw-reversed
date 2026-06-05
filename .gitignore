@@ -193,3 +193,11 @@ data/hsw.js
 data/hsw_pretty.js
 tools/n_token_decrypt_probe.last.json
 tools/capture_ntoken_key.last.json
+
+# Stray deobf files at repo root or in examples/ (canonical copies live in deobfuscated/)
+/hsw_deobf.js
+/hsw_deobf.blobs.*
+/hsj_deobf.js
+/hsj_deobf.blobs.*
+/examples/hsw_deobf.*
+/examples/hsj_deobf.*
