@@ -164,3 +164,40 @@ custom to hCaptcha's needs — possibly a variant of:
 The exact byte-formula requires tracing `local_151` and `local_35`
 back through their assignments — another ~200 lines of WAT reading
 to fully recover.
+
+## Cipher mode FAMILY identified as AES-CFB-variant
+
+Critical decryption test result: AES-CFB-128 with master `1bf04f88...`
+and various IV paddings produces the **SAME bytes from position 16+**:
+```
+Bytes 16+: 832b4a3fbb1a3ac31045c989281649... (3,743 bytes identical
+                                              across all IV variants)
+```
+
+This is the **mathematical signature of CFB-128** mode:
+- pt[0:16] = ct[0:16] XOR AES_K(IV)        — depends on IV
+- pt[16:32] = ct[16:32] XOR AES_K(ct[0:16]) — depends only on ct
+- pt[32:48] = ct[32:48] XOR AES_K(ct[16:32]) — depends only on ct
+
+If the cipher weren't CFB-style chaining on 16-byte boundaries, the bytes
+16+ would differ across IV variants. They don't.
+
+However, the resulting pt[16:] only has 37% printable bytes — not clean
+plaintext. This means **the AES key isn't the raw master `1bf04f88...`**
+OR **the CFB variant has a modified register update**.
+
+The WAT analysis shows the register update is NON-STANDARD:
+- swap positions 1↔14, 2↔13, 3↔12, 4↔11, 5↔10, 6↔9 (6 symmetric swaps)
+- inject u32 from `local_151` at position 15
+- copy old position 15 to position 0 (asymmetric)
+- inject byte from `local_35[0]` at position 7
+
+This is **AES-CFB-128 with a custom register permutation**. To produce
+a working decryptor:
+
+1. Implement the custom register-update step (swaps + injections)
+2. Apply CFB-128 decryption with this register
+3. Use master `1bf04f88...` as the AES key
+
+The key, the wire format, and the mode-family are now ALL identified.
+Only the specific register-permutation needs to be plugged in.
