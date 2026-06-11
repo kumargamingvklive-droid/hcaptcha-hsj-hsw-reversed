@@ -169,31 +169,57 @@ class KeyFetcher:
 
             # Look for the n-token encrypt entry's arg0 — the master key.
             # Different builds put the AES entry at different function
-            # indices; pick the ring whose values are CONSTANT across
-            # all records (indicating a static master key, not a
-            # per-call buffer pointer or output).
+            # indices; the master key shows up as the DOMINANT value in
+            # the KS site's arg0 ring. Higher record count = stronger
+            # statistical signal (e.g. f437_a0/178 on build 02210838,
+            # f367_a0/236 on build 145586e3).
+            #
+            # A ring is "static" if one value covers ≥95% of records.
+            # We don't require 100% because epilogue/init writes can
+            # leave 1-2 stray non-key values in an otherwise constant
+            # ring. We REJECT trivial cases (single-record rings; values
+            # that match an already-known encrypt/decrypt key; values
+            # that look like a Rust slice header).
+            from collections import Counter
+            known = {hsw_out.get("encrypt_key", ""),
+                     hsw_out.get("decrypt_key", "")}
+            def _looks_like_rust_header(hexv: str) -> bool:
+                # Pattern: small leading int (length) followed by mostly
+                # zeros — e.g. "...0100000000000000" or "00...00".
+                b = bytes.fromhex(hexv)
+                return (b.count(0) >= 24) or (b[4:].count(0) >= 20 and
+                                              int.from_bytes(b[:4], "little") < 256)
+
             captured = cap.get("captured", {})
             static_candidates = []
             for ring_name, recs in captured.items():
-                if not recs:
+                if len(recs) < 2:
+                    # Single-record "static" is vacuous; skip.
                     continue
-                first_key = recs[0]["key32_hex"]
-                if all(r["key32_hex"] == first_key for r in recs):
-                    static_candidates.append((ring_name, first_key, len(recs)))
+                counts = Counter(r["key32_hex"] for r in recs)
+                top_val, top_n = counts.most_common(1)[0]
+                frac = top_n / len(recs)
+                if frac < 0.95:
+                    continue
+                if top_val in known:
+                    continue
+                if _looks_like_rust_header(top_val):
+                    continue
+                static_candidates.append(
+                    (ring_name, top_val, len(recs), top_n, frac))
 
-            # Prefer rings on the smallest-callsite-count ring (the
-            # n-token encrypt entry itself, typically 1-2 records per
-            # call). Sort by record count ascending then prefer
-            # f-prefix endings 'a0' over 'a1'/'a2' (arg0 is the key
-            # pointer convention).
+            # Prefer rings with the MOST records (strongest statistical
+            # evidence). Tiebreak: prefer arg0 over arg1 (arg0 is the
+            # key buffer convention in fixslice32 wasm-bindgen calls).
             static_candidates.sort(
-                key=lambda x: (x[2], 0 if x[0].endswith("a0") else 1))
+                key=lambda x: (-x[2], 0 if x[0].endswith("a0") else 1))
             if static_candidates:
-                ring_name, key_hex, n_recs = static_candidates[0]
+                ring_name, key_hex, n_recs, top_n, frac = static_candidates[0]
                 hsw_n_key_hex = key_hex
                 hsw_n_key_verified = True
                 hsw_n_key_status = (
-                    f"captured-from-{ring_name}-{n_recs}records-static")
+                    f"captured-from-{ring_name}-{top_n}of{n_recs}records"
+                    f"-{frac:.0%}static")
                 self.log.info(
                     f"hsw n_key: {key_hex[:16]}... (from {ring_name})",
                     start=t0, end=time.time())
@@ -210,7 +236,7 @@ class KeyFetcher:
             }
 
             hsw_n_key_meta = {
-                "extraction_method": "direct-aes-site-capture (fn 330 arg0 pattern)",
+                "extraction_method": "direct-aes-site-capture (KS arg0 dominant-static ring)",
                 "captured_rings":    list(captured.keys()),
                 "static_rings":      [r[0] for r in static_candidates],
                 "live_n_token_b64":  cap.get("token", ""),

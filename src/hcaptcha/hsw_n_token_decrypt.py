@@ -69,7 +69,7 @@ Returns the raw msgpack-encoded plaintext bytes. Use ``msgpack.unpackb``
 to decode to a Python object.
 
 Raises ``NTokenError`` if every strategy failed.
-WARNING — current state (2026-06):
+WARNING â€” current state (2026-06):
 ==================================
 This module is NOT YET FUNCTIONAL on live n-tokens. The public API
 (decrypt_n_token, NTokenError) exists and the infrastructure is in
@@ -84,7 +84,7 @@ We have CONFIRMED via instrumentation:
     one with length=16 (GMAC tag finalization)
   - arg0 (key_ptr) is static across calls (same struct address each time)
   - The first 32 bytes at *arg0 are high-entropy, build-static, and
-    look like an AES master key — but do NOT decrypt the token
+    look like an AES master key â€” but do NOT decrypt the token
 
 Three remaining hypotheses:
   - The 32 bytes at *arg0 are a STRUCT HEADER (e.g. GCM context: H ||
