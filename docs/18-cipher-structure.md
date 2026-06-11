@@ -105,3 +105,62 @@ To produce a working Python decryptor, the precise byte-formula for:
 
 This is mechanically achievable but tedious. Each step would take
 several hours of careful WAT reading.
+
+## Counter encoding details (decoded from WAT lines 22901-23008)
+
+The 50 instructions immediately preceding the `call 548` at line 23017
+implement the per-block counter encoding. The AES input block lives at
+struct offset 2784..2799 (16 bytes). For each iteration:
+
+```
+;; Asymmetric initial step: inject new counter byte, shift old out
+struct[2784] = struct[2799]              ;; rotate old 2799 byte → 2784
+struct[2799] = (u32) local_151           ;; new counter bytes at 2799
+
+;; Symmetric swaps (byte-reverse the buffer)
+swap(struct[2785], struct[2798])
+swap(struct[2786], struct[2797])
+swap(struct[2796], struct[2787])
+swap(struct[2795], struct[2788])
+swap(struct[2794], struct[2789])
+swap(struct[2793], struct[2790])
+
+;; Inject counter byte from another source
+local_53 = byte_load(local_35[0])
+struct[2791] = local_53
+```
+
+This is a **custom counter encoding** that:
+1. Maintains an evolving 16-byte AES input block
+2. Byte-reverses parts on each call (endianness flip)
+3. Injects two new bytes per iteration (from `local_151` u64 wrap and
+   from `local_35[0]`)
+
+The presence of both `local_151` (a u64 counter) AND `local_35[0]`
+(a byte source) means the counter has TWO components — likely a
+**block index** plus a **chaining feedback** byte from the previous
+ciphertext block. This rules out pure CTR-mode and suggests an
+**OFB/CFB-style chaining variant** or a custom AEAD with feedback.
+
+## Why pure-CTR brute fails
+
+Standard AES-CTR uses `nonce || counter` as the input to AES. Our brute
+tested:
+- `iv || u32(counter)` big/little endian
+- `iv[::-1] || u32(counter)`
+- `u128(iv) + counter`
+
+NONE of these match the actual encoding, which:
+1. **Maintains state across blocks** (the byte-shift pattern)
+2. **Injects bytes from a separate counter** (`local_35[0]`)
+3. **Byte-reverses portions** of the input block per call
+
+This is a NON-STANDARD AEAD with **counter-feedback chaining**. Likely
+custom to hCaptcha's needs — possibly a variant of:
+- AES-CFB with 16-byte feedback (modified)
+- AES-OFB with state mutation
+- A homebrew CTR variant with output-feedback
+
+The exact byte-formula requires tracing `local_151` and `local_35`
+back through their assignments — another ~200 lines of WAT reading
+to fully recover.
