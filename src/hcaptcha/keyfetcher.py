@@ -157,7 +157,46 @@ class KeyFetcher:
         hsw_n_key_meta    = {}
         hsw_fp_blob_key   = None
         hsw_fp_blob_meta  = {}
+
+        class _SkipLegacyNKey(Exception):
+            pass
+
+        # PRIMARY: verified round-key recovery of the n-token master. Self-
+        # verifying — returned only on an exact 120/120 AES-256 key-schedule
+        # match against the live captured round keys; the master reproduces the
+        # live n-token keystream (AES-256-GCM). See docs/19-ntoken-cipher-solved.md.
         try:
+            self.log.info("recovering HSW n_key (verified round-key inversion)...",
+                          start=t0, end=time.time())
+            from .hsw_n_token_decrypt import recover_ntoken_master_live
+            master = recover_ntoken_master_live(version=self.version)
+            if master is not None:
+                hsw_n_key_hex = master.hex()
+                hsw_n_key_verified = True
+                hsw_n_key_status = "recovered-roundkey-inversion-schedule-verified-120of120"
+                hsw_n_key_meta = {
+                    "extraction_method": (
+                        "fixslice round-key inversion of the n-token AES fn "
+                        "(hsw_n_token_decrypt.recover_ntoken_master_live)"),
+                    "verified": (
+                        "self-verifying: returned only on an exact 120/120 AES-256 "
+                        "key-schedule match against the live captured round keys; "
+                        "the master reproduces the live n-token keystream "
+                        "(AES-256-GCM). See docs/19-ntoken-cipher-solved.md."),
+                    "note": (
+                        "Build-constant n-token AES-256 master; rotates per asset "
+                        "build, like the encrypt/decrypt keys."),
+                }
+                self.log.info(f"hsw n_key: {hsw_n_key_hex[:16]}... (verified)",
+                              start=t0, end=time.time())
+        except Exception as e:
+            self.log.info(f"verified n_key recovery failed: {e}",
+                          start=t0, end=time.time())
+
+        # FALLBACK: legacy heuristic AES-site capture, only if recovery failed.
+        try:
+            if hsw_n_key_hex is not None:
+                raise _SkipLegacyNKey()
             self.log.info("extracting HSW n_key (direct AES-site capture)...",
                           start=t0, end=time.time())
             from .hsw_n_key_capture import capture as capture_n_key
@@ -260,6 +299,8 @@ class KeyFetcher:
             }
             # short-circuit the legacy trace path below
             full = None
+        except _SkipLegacyNKey:
+            pass   # n_key already recovered by the verified path above
         except Exception as e:
             self.log.info(f"direct AES-site capture failed: {e}",
                           start=t0, end=time.time())
@@ -277,6 +318,14 @@ class KeyFetcher:
                 "shipped — start by re-running tools/find_ntoken_aes.py "
                 "to locate the new AES encrypt entry."
             ))
+
+        # fingerprint-blob key = sha256(n_key), deterministic from whichever
+        # source produced n_key (verified recovery or legacy fallback).
+        if hsw_n_key_hex:
+            hsw_fp_blob_key = hashlib.sha256(
+                bytes.fromhex(hsw_n_key_hex)).hexdigest()
+            hsw_fp_blob_meta = {"construction": "sha256(hsw.n_key)",
+                                "source": hsw_n_key_status}
 
         hsw_keys = {
             "encrypt_key":          hsw_out["encrypt_key"],
