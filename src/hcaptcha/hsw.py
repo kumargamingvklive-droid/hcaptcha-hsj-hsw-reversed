@@ -75,11 +75,15 @@ def _read_magics_from_deobf(version: str) -> dict:
     deobf_path = fetch_and_deobfuscate("hsw.js", version, quiet=True)
     src = open(deobf_path, "r", encoding="utf-8").read()
 
+    # The dispatcher export name rotates per build (vc -> uc -> ...), so match
+    # any `obj.method(<magic>` call. The magic is a large number; the only other
+    # call before it is the allocator `gc(-16)` (tiny arg), so requiring a 5+
+    # digit first arg picks the dispatcher call regardless of its rotated name.
     enc_match = re.search(
-        r"encrypt_req_data: function \([^)]*\) \{[^}]*?\b\w+\.vc\((-?\d+)",
+        r"encrypt_req_data: function \([^)]*\) \{[^}]*?\b\w+\.\w+\((-?\d{5,})",
         src, re.S)
     dec_match = re.search(
-        r"decrypt_resp_data: function \([^)]*\) \{[^}]*?\b\w+\.vc\((-?\d+)",
+        r"decrypt_resp_data: function \([^)]*\) \{[^}]*?\b\w+\.\w+\((-?\d{5,})",
         src, re.S)
     if not enc_match or not dec_match:
         raise RuntimeError(

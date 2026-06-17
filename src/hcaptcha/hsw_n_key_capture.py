@@ -280,16 +280,24 @@ def capture(version: str | None = None, log: Logger | None = None) -> dict:
 
     table = _parse_elements(mod)
     exp = {e["name"]: e["idx"] for e in mod.exports if e["kind"] == "func"}
+    # The dispatcher export name rotates per build (vc -> uc -> ...); resolve it
+    # structurally rather than by hardcoded name so the exclusion filter below
+    # keeps working across builds.
+    from . import hsw as _hsw
+    try:
+        disp_idx = _hsw._find_dispatcher_func(mod)
+    except Exception:
+        disp_idx = exp.get("vc")
     log.info(f"  exports: pc={exp.get('pc')} ec={exp.get('ec')} "
-             f"kc={exp.get('kc')} vc={exp.get('vc')}", start=0, end=0)
+             f"kc={exp.get('kc')} dispatcher=fn{disp_idx}", start=0, end=0)
 
     # Find KS candidates
     ks_all = _find_ks_candidates(mod, log)
 
-    # Filter to ones reachable from ec/pc/kc but NOT vc (we want the
-    # n-token-path KS, not the vc/encrypt_req_data KS).
+    # Filter to ones reachable from ec/pc/kc but NOT the dispatcher (we want the
+    # n-token-path KS, not the encrypt_req_data KS).
     reach_ec = _reach_from(mod, table, exp["ec"]) if "ec" in exp else set()
-    reach_vc = _reach_from(mod, table, exp["vc"]) if "vc" in exp else set()
+    reach_vc = _reach_from(mod, table, disp_idx) if disp_idx is not None else set()
 
     ks_targets = [k for k in ks_all if k in reach_ec and k not in reach_vc]
     log.info(f"  KS candidates reachable from ec but not vc: {ks_targets}",
