@@ -1,26 +1,37 @@
 """instrument_encrypt_entry.py — dump (arg0, arg1, arg2, *arg*) at the
-n-token AES encrypt entry function.
+n-token AES encrypt entry function, BOTH at prologue AND at epilogue.
 
 We dynamically discover ENTRY_FN on the current build:
   * signature (i32,i32,i32) -> (i32)
   * calls a fixslice32 KS function 3+ times
   * reachable from one of {ec, pc, kc}
 
-We splice a prologue that records a single ring of fixed-size records:
+We splice TWO instrumentation hooks into ENTRY_FN:
 
-    struct rec {
-        u32 counter;          // index in ring
-        u32 arg0;
-        u32 arg1;
-        u32 arg2;
-        u8  buf0[32];         // bytes at *arg0 (KEY candidate)
-        u8  buf1[256];        // bytes at *arg1 (PT/CT/AAD candidate)
-        u8  buf2[256];        // bytes at *arg2 (PT/CT/AAD candidate)
-    };  // 4*4 + 32 + 256 + 256 = 560 bytes
+  PROLOGUE (at code_off = 0): records a fixed-size PRE record
+      struct rec_pre {
+          u32 counter;          // index in ring
+          u32 arg0;
+          u32 arg1;
+          u32 arg2;
+          u8  buf0[32];         // bytes at *arg0 (KEY candidate)
+          u8  buf1[3072];       // bytes at *arg1 (PT/CT/AAD candidate, FULL)
+          u8  buf2[256];        // bytes at *arg2 (PT/CT/AAD candidate)
+      };
 
-We drive window.hsw(jwt) and read the ring. Then we also re-read each
-record's three pointers AFTER the call to see what the OUTPUT pointer
-ended up containing (post-encryption).
+  EPILOGUE (spliced just before the function's final 0x0b 'end'):
+  records a fixed-size POST record with the same layout, re-reading
+  the buffers from the SAVED arg pointers. This lets us see whether
+  fn 226 mutates *arg1 in-place (e.g. plaintext -> ciphertext) or
+  leaves it untouched.
+
+The epilogue is stack-neutral so it does not disturb the function's
+return value (left on the stack right before the final 'end').
+
+NOTE: The epilogue only fires on the function's normal return path.
+If fn 226 has early `return` opcodes elsewhere in its body, those
+calls will produce a PRE record but no POST record. The pre and post
+counters are reported separately so the caller can detect this.
 """
 from __future__ import annotations
 
@@ -48,21 +59,32 @@ from hcaptcha.hsw_bridge import HSWAnalyzer
 
 # Record layout
 REC_HEADER = 16                              # counter + 3 ptrs
-REC_BUF0   = 32                              # bytes at *arg0 (key)
-REC_BUF1   = 256                             # bytes at *arg1
-REC_BUF2   = 256                             # bytes at *arg2
-REC_SIZE   = REC_HEADER + REC_BUF0 + REC_BUF1 + REC_BUF2   # 560
-MAX_RECS   = 64                              # 64 calls per record
+REC_BUF0   = 512                             # bytes at *arg0 (cipher ctx / round keys)
+REC_BUF1   = 4096                            # bytes at *arg1 (FULL hCaptcha buf)
+REC_BUF2   = 256                             # bytes at *arg2 (or length, if scalar)
+REC_SIZE   = REC_HEADER + REC_BUF0 + REC_BUF1 + REC_BUF2   # 3376
+MAX_RECS   = 16                              # 16 calls per record set
 
 # Memory layout in wasm scratch (above usual heap usage)
-COUNTER_ADDR = 60_000                        # u32 counter (PRE)
-BUF_ADDR     = 60_004                        # 64 * 560 = 35,840 bytes
-GATE_ADDR    = COUNTER_ADDR + 4 + MAX_RECS * REC_SIZE + 16  # well past ring
+# We pick a high address that's well past the typical heap but inside
+# the initial memory.size (hCaptcha wasm has ~1MB initial pages).
+PRE_COUNTER_ADDR  = 60_000                                  # u32 PRE counter
+PRE_BUF_ADDR      = 60_004                                  # MAX_RECS * REC_SIZE
+POST_COUNTER_ADDR = PRE_BUF_ADDR + MAX_RECS * REC_SIZE + 16  # u32 POST counter
+POST_BUF_ADDR     = POST_COUNTER_ADDR + 4                    # MAX_RECS * REC_SIZE
+GATE_ADDR         = POST_BUF_ADDR + MAX_RECS * REC_SIZE + 16
 
-# Tmp slots
-TMP_C    = GATE_ADDR + 16
-TMP_A    = TMP_C + 4
-TMP_OFF  = TMP_A + 4
+# Tmp slots for codegen (scalar scratch)
+TMP_C        = GATE_ADDR + 16                # current PRE counter
+TMP_A        = TMP_C + 4                     # current PRE record base addr
+TMP_SAVED_A1 = TMP_A + 4                     # saved arg1 ptr  (read back in post)
+TMP_SAVED_A2 = TMP_SAVED_A1 + 4              # saved arg2      (read back in post)
+TMP_SAVED_A0 = TMP_SAVED_A2 + 4              # saved arg0 ptr
+TMP_PC       = TMP_SAVED_A0 + 4              # current POST counter
+TMP_PA       = TMP_PC + 4                    # current POST record base addr
+
+# Total scratch end (sanity)
+SCRATCH_END  = TMP_PA + 4
 
 # --------------------------------------------------------------------
 # WebAssembly.instantiate hook (same as hsw_n_key_capture)
@@ -222,13 +244,6 @@ def _count_calls_to(mod: WasmModule, caller: int, targets: set[int]) -> int:
 def _find_encrypt_entry(mod: WasmModule, log: Logger) -> int:
     """Discover ENTRY_FN with sig (i32,i32,i32)->(i32) that calls a
     fixslice KS function 3+ times.
-
-    The workflow says it should be reachable from one of {ec, pc, kc};
-    we verify by computing reachability with call-graph that INCLUDES
-    call_indirect (the wbg-bindgen Promise dispatchers use table
-    dispatch heavily). If no candidate satisfies strict reachability,
-    we fall back to the structural fingerprint alone (it's specific
-    enough to be unique).
     """
     ks_set = _find_ks_set(mod)
     log.info(f"  fixslice KS candidates: {sorted(ks_set)}", start=0, end=0)
@@ -244,7 +259,6 @@ def _find_encrypt_entry(mod: WasmModule, log: Logger) -> int:
             log.info(f"    reachable from {ex}: {len(r)} funcs",
                      start=0, end=0)
 
-    # Sig fingerprint candidates
     sig3 = (["i32", "i32", "i32"], ["i32"])
     fingerprint_cands = []
     for f in mod.functions:
@@ -263,35 +277,75 @@ def _find_encrypt_entry(mod: WasmModule, log: Logger) -> int:
     if not fingerprint_cands:
         raise RuntimeError("no encrypt entry candidate found")
 
-    # Prefer (most KS calls, AND reachable). The reachability test
-    # may fail because the encrypt entry sits behind a wbg-bindgen
-    # dispatcher that's only reachable via a non-{ec,pc,kc} export
-    # (it can sit under {ic, lc, oc, qc} on this build).
     chosen = fingerprint_cands[0][0]
     log.info(f"  -> chose ENTRY_FN = {chosen}", start=0, end=0)
     return chosen
 
 
 # --------------------------------------------------------------------
-# Prologue codegen
+# Helpers for emitting "copy bytes from src ptr -> dst region" inline.
+# Stack-neutral (everything is store-style: addr/value pushes followed
+# by store pops in equal measure).
 # --------------------------------------------------------------------
-def _build_prologue(n_args_total: int) -> bytes:
-    """Build a prologue that records (counter, arg0, arg1, arg2,
-    buf0[32], buf1[256], buf2[256]) into the ring.
+def _emit_copy_inline(src_addr_push: bytes, dst_base_push: bytes,
+                      dst_off_base: int, n_bytes: int) -> bytes:
+    """Emit wasm bytes that copy `n_bytes` from address (src_addr_push)
+    to (dst_base_push + dst_off_base..). Each push is a sequence of
+    wasm bytes that leaves a single i32 (address) on the stack.
 
-    Each arg is local[arg_idx]. n_args_total is the count of i32 params
-    (should be 3) but we only ever dump exactly 3.
+    Uses i64 block copies for 8B chunks, byte tail for remainder.
+    Stack-neutral overall.
     """
     out = bytearray()
+    n_q = n_bytes // 8
+    n_r = n_bytes - n_q * 8
+    for q in range(n_q):
+        # dst addr
+        out += dst_base_push
+        # i64.load (unaligned) from src + q*8
+        out += src_addr_push
+        out += b"\x29\x00" + encode_uleb(q * 8)
+        # i64.store align=0 off=(dst_off_base + q*8)
+        out += b"\x37\x00" + encode_uleb(dst_off_base + q * 8)
+    for r in range(n_r):
+        out += dst_base_push
+        out += src_addr_push
+        out += b"\x2d\x00" + encode_uleb(n_q * 8 + r)        # i32.load8_u
+        out += b"\x3a\x00" + encode_uleb(dst_off_base + n_q * 8 + r)  # i32.store8
+    return bytes(out)
+
+
+# --------------------------------------------------------------------
+# PRE prologue codegen
+# --------------------------------------------------------------------
+def _build_prologue() -> bytes:
+    """Build PRE prologue.
+
+    Records (counter, arg0, arg1, arg2, buf0[32], buf1[3072], buf2[256])
+    into the PRE ring, and ALSO saves arg0/arg1/arg2 to TMP slots so
+    the EPILOGUE can re-read the same pointers.
+    """
+    out = bytearray()
+
+    # Save arg0/arg1/arg2 to TMP slots unconditionally (so even if the
+    # gate is closed we don't read stale values from a prior call).
+    def _save_local(addr: int, local_idx: int) -> bytes:
+        return (b"\x41" + encode_sleb(addr) +
+                b"\x20" + encode_uleb(local_idx) +
+                b"\x36\x02\x00")   # i32.store
+
+    out += _save_local(TMP_SAVED_A0, 0)
+    out += _save_local(TMP_SAVED_A1, 1)
+    out += _save_local(TMP_SAVED_A2, 2)
 
     # if (*GATE) {
     out += b"\x41" + encode_sleb(GATE_ADDR)
     out += b"\x28\x02\x00"          # i32.load
     out += b"\x04\x40"              # if (empty)
 
-    # tmp_c = *COUNTER
+    # tmp_c = *PRE_COUNTER
     out += b"\x41" + encode_sleb(TMP_C)
-    out += b"\x41" + encode_sleb(COUNTER_ADDR)
+    out += b"\x41" + encode_sleb(PRE_COUNTER_ADDR)
     out += b"\x28\x02\x00"
     out += b"\x36\x02\x00"
 
@@ -302,74 +356,69 @@ def _build_prologue(n_args_total: int) -> bytes:
     out += b"\x49"                  # i32.lt_u
     out += b"\x04\x40"              # if (empty)
 
-    # tmp_a = BUF + tmp_c * REC_SIZE
+    # tmp_a = PRE_BUF + tmp_c * REC_SIZE
     out += b"\x41" + encode_sleb(TMP_A)
     out += b"\x41" + encode_sleb(TMP_C)
     out += b"\x28\x02\x00"
     out += b"\x41" + encode_sleb(REC_SIZE)
     out += b"\x6c"                  # i32.mul
-    out += b"\x41" + encode_sleb(BUF_ADDR)
+    out += b"\x41" + encode_sleb(PRE_BUF_ADDR)
     out += b"\x6a"                  # i32.add
     out += b"\x36\x02\x00"
 
-    # Helpers — store a u32 v at tmp_a + off
-    def _store_u32_at_off(off: int, push_value_bytes: bytes):
-        # base addr (tmp_a)
-        nonlocal out
-        out += b"\x41" + encode_sleb(TMP_A)
-        out += b"\x28\x02\x00"
-        # value
-        out += push_value_bytes
-        # i32.store align=2 off
-        out += b"\x36\x02" + encode_uleb(off)
+    # Helpers to push tmp_a (record base addr)
+    push_base = (b"\x41" + encode_sleb(TMP_A) + b"\x28\x02\x00")
 
-    # *(tmp_a + 0)  = counter
-    _store_u32_at_off(0,  b"\x41" + encode_sleb(TMP_C) + b"\x28\x02\x00")
+    # *(tmp_a + 0)  = tmp_c
+    out += push_base
+    out += b"\x41" + encode_sleb(TMP_C) + b"\x28\x02\x00"
+    out += b"\x36\x02" + encode_uleb(0)
     # *(tmp_a + 4)  = arg0
-    _store_u32_at_off(4,  b"\x20" + encode_uleb(0))
+    out += push_base
+    out += b"\x20" + encode_uleb(0)
+    out += b"\x36\x02" + encode_uleb(4)
     # *(tmp_a + 8)  = arg1
-    _store_u32_at_off(8,  b"\x20" + encode_uleb(1))
+    out += push_base
+    out += b"\x20" + encode_uleb(1)
+    out += b"\x36\x02" + encode_uleb(8)
     # *(tmp_a + 12) = arg2
-    _store_u32_at_off(12, b"\x20" + encode_uleb(2))
+    out += push_base
+    out += b"\x20" + encode_uleb(2)
+    out += b"\x36\x02" + encode_uleb(12)
 
     # ---- copy bytes from *argX to record buffer X --------------------
-    def _copy_bytes_from_arg(arg_local: int, dst_field_off: int,
-                              n_bytes: int):
-        """memcpy n_bytes from local[arg_local] (pointer) to
-        record_base + dst_field_off. Inlined as i64 blocks (8 bytes
-        each), then byte-by-byte tail. We guard with: if (arg != 0).
-        """
-        nonlocal out
-        # if (arg != 0) {
-        out += b"\x20" + encode_uleb(arg_local)        # local.get arg
-        out += b"\x04\x40"                             # if (empty)
-        # Block copy: n_bytes is always a small constant (32 or 256).
-        n_q = n_bytes // 8
-        n_r = n_bytes - n_q * 8
-        for q in range(n_q):
-            # dst addr
-            out += b"\x41" + encode_sleb(TMP_A)
-            out += b"\x28\x02\x00"
-            # value: i64.load *(arg + q*8)
-            out += b"\x20" + encode_uleb(arg_local)
-            out += b"\x29\x00" + encode_uleb(q * 8)    # align=0 (unaligned-safe)
-            # i64.store align=0 off=(dst_field_off + q*8)
-            out += b"\x37\x00" + encode_uleb(dst_field_off + q * 8)
-        for r in range(n_r):
-            out += b"\x41" + encode_sleb(TMP_A)
-            out += b"\x28\x02\x00"
-            out += b"\x20" + encode_uleb(arg_local)
-            out += b"\x2d\x00" + encode_uleb(n_q * 8 + r)  # i32.load8_u
-            out += b"\x3a\x00" + encode_uleb(dst_field_off + n_q * 8 + r)  # i32.store8
-        out += b"\x0b"                                 # end if (arg!=0)
+    def _push_local_ptr(local_idx: int) -> bytes:
+        return b"\x20" + encode_uleb(local_idx)
 
-    # arg0 -> buf0 (32B), arg1 -> buf1 (256B), arg2 -> buf2 (256B)
-    _copy_bytes_from_arg(0, REC_HEADER, REC_BUF0)
-    _copy_bytes_from_arg(1, REC_HEADER + REC_BUF0, REC_BUF1)
-    _copy_bytes_from_arg(2, REC_HEADER + REC_BUF0 + REC_BUF1, REC_BUF2)
+    def _copy_local_buf(arg_local: int, dst_field_off: int,
+                        n_bytes: int) -> bytes:
+        # if (arg != 0) { copy }
+        body = bytearray()
+        body += b"\x20" + encode_uleb(arg_local)        # local.get arg
+        body += b"\x04\x40"                              # if (empty)
+        body += _emit_copy_inline(
+            src_addr_push=_push_local_ptr(arg_local),
+            dst_base_push=push_base,
+            dst_off_base=dst_field_off,
+            n_bytes=n_bytes,
+        )
+        body += b"\x0b"                                  # end if
+        return bytes(body)
+
+    # arg0 -> buf0 (32B)
+    out += _copy_local_buf(0, REC_HEADER, REC_BUF0)
+    # arg1 -> buf1 (3072B)
+    out += _copy_local_buf(1, REC_HEADER + REC_BUF0, REC_BUF1)
+    # arg2 -> buf2 (256B)  -- note arg2 may be a small int (a length),
+    # in which case the deref pointer is small and reading would either
+    # trap or grab random low memory. The function only runs if
+    # arg2 != 0; small-int args (lengths) of 0 won't run. For non-zero
+    # small-int args we'd just read invalid memory. That's fine; we
+    # report the bytes regardless.
+    out += _copy_local_buf(2, REC_HEADER + REC_BUF0 + REC_BUF1, REC_BUF2)
 
     # counter++
-    out += b"\x41" + encode_sleb(COUNTER_ADDR)
+    out += b"\x41" + encode_sleb(PRE_COUNTER_ADDR)
     out += b"\x41" + encode_sleb(TMP_C)
     out += b"\x28\x02\x00"
     out += b"\x41" + encode_sleb(1)
@@ -377,6 +426,101 @@ def _build_prologue(n_args_total: int) -> bytes:
     out += b"\x36\x02\x00"
 
     out += b"\x0b"   # end if (counter < MAX)
+    out += b"\x0b"   # end if (gate)
+    return bytes(out)
+
+
+# --------------------------------------------------------------------
+# POST epilogue codegen
+# --------------------------------------------------------------------
+def _build_epilogue() -> bytes:
+    """Build POST epilogue, to be spliced JUST BEFORE the function's
+    final 0x0b 'end'. Stack-neutral (the return value sits underneath
+    on the operand stack; we never touch it).
+
+    Re-reads buffers from the SAVED arg pointers (TMP_SAVED_A0/1/2).
+    """
+    out = bytearray()
+
+    # if (*GATE) {
+    out += b"\x41" + encode_sleb(GATE_ADDR)
+    out += b"\x28\x02\x00"
+    out += b"\x04\x40"
+
+    # tmp_pc = *POST_COUNTER
+    out += b"\x41" + encode_sleb(TMP_PC)
+    out += b"\x41" + encode_sleb(POST_COUNTER_ADDR)
+    out += b"\x28\x02\x00"
+    out += b"\x36\x02\x00"
+
+    # if (tmp_pc < MAX_RECS) {
+    out += b"\x41" + encode_sleb(TMP_PC)
+    out += b"\x28\x02\x00"
+    out += b"\x41" + encode_sleb(MAX_RECS)
+    out += b"\x49"
+    out += b"\x04\x40"
+
+    # tmp_pa = POST_BUF + tmp_pc * REC_SIZE
+    out += b"\x41" + encode_sleb(TMP_PA)
+    out += b"\x41" + encode_sleb(TMP_PC)
+    out += b"\x28\x02\x00"
+    out += b"\x41" + encode_sleb(REC_SIZE)
+    out += b"\x6c"
+    out += b"\x41" + encode_sleb(POST_BUF_ADDR)
+    out += b"\x6a"
+    out += b"\x36\x02\x00"
+
+    push_base = (b"\x41" + encode_sleb(TMP_PA) + b"\x28\x02\x00")
+
+    # *(tmp_pa + 0)  = tmp_pc
+    out += push_base
+    out += b"\x41" + encode_sleb(TMP_PC) + b"\x28\x02\x00"
+    out += b"\x36\x02" + encode_uleb(0)
+    # *(tmp_pa + 4)  = saved arg0
+    out += push_base
+    out += b"\x41" + encode_sleb(TMP_SAVED_A0) + b"\x28\x02\x00"
+    out += b"\x36\x02" + encode_uleb(4)
+    # *(tmp_pa + 8)  = saved arg1
+    out += push_base
+    out += b"\x41" + encode_sleb(TMP_SAVED_A1) + b"\x28\x02\x00"
+    out += b"\x36\x02" + encode_uleb(8)
+    # *(tmp_pa + 12) = saved arg2
+    out += push_base
+    out += b"\x41" + encode_sleb(TMP_SAVED_A2) + b"\x28\x02\x00"
+    out += b"\x36\x02" + encode_uleb(12)
+
+    # ---- copy bytes from *saved_arg{0,1,2} ---------------------------
+    def _push_saved(addr: int) -> bytes:
+        return b"\x41" + encode_sleb(addr) + b"\x28\x02\x00"
+
+    def _copy_saved_buf(saved_addr: int, dst_field_off: int,
+                        n_bytes: int) -> bytes:
+        body = bytearray()
+        body += _push_saved(saved_addr)                   # push saved val
+        body += b"\x04\x40"                                # if (val != 0)
+        body += _emit_copy_inline(
+            src_addr_push=_push_saved(saved_addr),
+            dst_base_push=push_base,
+            dst_off_base=dst_field_off,
+            n_bytes=n_bytes,
+        )
+        body += b"\x0b"
+        return bytes(body)
+
+    out += _copy_saved_buf(TMP_SAVED_A0, REC_HEADER, REC_BUF0)
+    out += _copy_saved_buf(TMP_SAVED_A1, REC_HEADER + REC_BUF0, REC_BUF1)
+    out += _copy_saved_buf(TMP_SAVED_A2,
+                           REC_HEADER + REC_BUF0 + REC_BUF1, REC_BUF2)
+
+    # counter++
+    out += b"\x41" + encode_sleb(POST_COUNTER_ADDR)
+    out += b"\x41" + encode_sleb(TMP_PC)
+    out += b"\x28\x02\x00"
+    out += b"\x41" + encode_sleb(1)
+    out += b"\x6a"
+    out += b"\x36\x02\x00"
+
+    out += b"\x0b"   # end if (tmp_pc < MAX)
     out += b"\x0b"   # end if (gate)
     return bytes(out)
 
@@ -398,10 +542,48 @@ def run(version: str | None = None) -> dict:
     entry_fn = _find_encrypt_entry(mod, log)
     log.info(f"ENTRY_FN = {entry_fn}", start=0, end=0)
 
-    # Patch the module
+    # Find code-relative offset of the FINAL 0x0b byte in fn 226's body
+    entry_f = next(f for f in mod.functions if f["func_idx"] == entry_fn)
+    body_size = entry_f["code_end"] - entry_f["code_start"]
+    final_end_code_off = body_size - 1
+    if mod.raw[entry_f["code_end"] - 1] != 0x0b:
+        raise RuntimeError(
+            f"fn {entry_fn} body does not end with 0x0b "
+            f"(last byte = {mod.raw[entry_f['code_end']-1]:#x})")
+    log.info(f"  body_size={body_size}B, final 'end' at code_off="
+             f"{final_end_code_off}", start=0, end=0)
+
+    # Count early-return opcodes in the body for diagnostic purposes
+    # (these skip the epilogue, so the POST counter may lag PRE).
+    instrs = mod.decode_function(entry_fn) or []
+    early_returns = sum(1 for n, _, _, _ in instrs if n == "return")
+    log.info(f"  early `return` opcodes in body: {early_returns}",
+             start=0, end=0)
+
+    # Patch the module: PRE prologue at code_off=0, POST epilogue
+    # spliced (a) just before the final 0x0b 'end' AND (b) immediately
+    # before every `return` opcode in the body. The epilogue is
+    # stack-neutral so it doesn't disturb the return value sitting on
+    # the operand stack just before the `return`.
     writer = ModuleWriter(mod)
-    prologue = _build_prologue(n_args_total=3)
-    writer.code.splice_code(entry_fn, 0, n_replace=0, new_bytes=prologue)
+    prologue = _build_prologue()
+    epilogue = _build_epilogue()
+
+    # Insertion points for the epilogue: every `return` (code_off) plus
+    # the final-end position.
+    return_offsets = [off for n, _, off, _ in instrs if n == "return"]
+    epilogue_sites = sorted(set(return_offsets + [final_end_code_off]))
+    log.info(f"  epilogue insertion sites (code_off): {epilogue_sites}",
+             start=0, end=0)
+    for code_off in epilogue_sites:
+        writer.code.splice_code(entry_fn, code_off,
+                                n_replace=0, new_bytes=epilogue)
+    writer.code.splice_code(entry_fn, 0,
+                            n_replace=0, new_bytes=prologue)
+
+    log.info(f"  prologue size = {len(prologue)}B, "
+             f"epilogue size = {len(epilogue)}B, "
+             f"sites = {len(epilogue_sites)}", start=0, end=0)
 
     # peek/poke exports
     t_i32_to_i32 = next(
@@ -464,7 +646,7 @@ def run(version: str | None = None) -> dict:
             + ".fake"
         )
 
-        # Reset counter, enable gate, run hsw(jwt)
+        # Reset counters, enable gate, run hsw(jwt)
         rt.eval(
             f"""
             globalThis.__done = 0;
@@ -472,7 +654,8 @@ def run(version: str | None = None) -> dict:
             globalThis.__err = '';
             (async () => {{
                 const e = globalThis.__hsw_exports;
-                e.__poke32({COUNTER_ADDR}, 0);
+                e.__poke32({PRE_COUNTER_ADDR}, 0);
+                e.__poke32({POST_COUNTER_ADDR}, 0);
                 e.__poke32({GATE_ADDR}, 1);
                 try {{
                     const r = await window.hsw('{jwt}');
@@ -498,74 +681,74 @@ def run(version: str | None = None) -> dict:
         token = rt.eval("globalThis.__tok") or ""
         log.info(f"token len={len(token)}", start=0, end=0)
 
-        n_recs_total = (rt.eval(
-            f"globalThis.__hsw_exports.__peek32({COUNTER_ADDR})"
+        n_pre_total = (rt.eval(
+            f"globalThis.__hsw_exports.__peek32({PRE_COUNTER_ADDR})"
         ) or 0) & 0xFFFFFFFF
-        n_recs = min(n_recs_total, MAX_RECS)
-        log.info(f"records captured: {n_recs} (counter={n_recs_total})",
+        n_post_total = (rt.eval(
+            f"globalThis.__hsw_exports.__peek32({POST_COUNTER_ADDR})"
+        ) or 0) & 0xFFFFFFFF
+        n_pre  = min(n_pre_total,  MAX_RECS)
+        n_post = min(n_post_total, MAX_RECS)
+        log.info(f"pre  records: {n_pre} (counter={n_pre_total})",
+                 start=0, end=0)
+        log.info(f"post records: {n_post} (counter={n_post_total})",
                  start=0, end=0)
 
-        # Read raw ring
-        total_bytes = n_recs * REC_SIZE
-        arr = rt.eval(
-            f"""(function() {{
-                const mem = new Uint8Array(
-                    globalThis.__hsw_memory.buffer, {BUF_ADDR}, {total_bytes});
-                return Array.from(mem);
-            }})()"""
-        ) or []
-        arr = bytes(arr)
+        # Helper to bulk-read a contiguous region as bytes
+        def _read_region(addr: int, n_bytes: int) -> bytes:
+            if n_bytes <= 0:
+                return b""
+            # Read in chunks to avoid creating huge JSON arrays in one
+            # eval call (3072*16 = 49152 bytes is fine; do it in one).
+            arr = rt.eval(
+                f"""(function() {{
+                    const mem = new Uint8Array(
+                        globalThis.__hsw_memory.buffer, {addr}, {n_bytes});
+                    return Array.from(mem);
+                }})()"""
+            ) or []
+            return bytes(arr)
 
-        # Parse + AFTER-call snapshot from each unique arg pointer
-        records = []
-        unique_ptrs = set()
-        for i in range(n_recs):
-            base = i * REC_SIZE
-            counter = int.from_bytes(arr[base:base+4],     "little")
-            a0      = int.from_bytes(arr[base+4:base+8],   "little")
-            a1      = int.from_bytes(arr[base+8:base+12],  "little")
-            a2      = int.from_bytes(arr[base+12:base+16], "little")
-            buf0    = arr[base+REC_HEADER:base+REC_HEADER+REC_BUF0]
-            buf1    = arr[base+REC_HEADER+REC_BUF0:
-                         base+REC_HEADER+REC_BUF0+REC_BUF1]
-            buf2    = arr[base+REC_HEADER+REC_BUF0+REC_BUF1:
-                         base+REC_HEADER+REC_BUF0+REC_BUF1+REC_BUF2]
-            records.append({
-                "counter": counter, "arg0": a0, "arg1": a1, "arg2": a2,
-                "buf0_pre_hex": buf0.hex(),
-                "buf1_pre_hex": buf1.hex(),
-                "buf2_pre_hex": buf2.hex(),
-            })
-            unique_ptrs.update([a0, a1, a2])
+        pre_blob  = _read_region(PRE_BUF_ADDR,  n_pre  * REC_SIZE)
+        post_blob = _read_region(POST_BUF_ADDR, n_post * REC_SIZE)
 
-        # AFTER-call snapshot for unique ptrs (so we can identify the
-        # output buffer — its memory should have changed and now look
-        # like ciphertext).
-        after = {}
-        for p in unique_ptrs:
-            if p == 0 or p > 16 * 1024 * 1024:
-                continue
-            try:
-                hex_bytes = rt.eval(
-                    f"""(function() {{
-                        const mem = new Uint8Array(
-                            globalThis.__hsw_memory.buffer, {p}, 512);
-                        return Array.from(mem);
-                    }})()"""
-                ) or []
-                after[p] = bytes(hex_bytes).hex()
-            except Exception as e:
-                after[p] = f"ERR:{e}"
+        def _parse_blob(blob: bytes, n_recs: int) -> list[dict]:
+            recs = []
+            for i in range(n_recs):
+                base = i * REC_SIZE
+                counter = int.from_bytes(blob[base:base+4],     "little")
+                a0      = int.from_bytes(blob[base+4:base+8],   "little")
+                a1      = int.from_bytes(blob[base+8:base+12],  "little")
+                a2      = int.from_bytes(blob[base+12:base+16], "little")
+                buf0    = blob[base+REC_HEADER:base+REC_HEADER+REC_BUF0]
+                buf1    = blob[base+REC_HEADER+REC_BUF0:
+                              base+REC_HEADER+REC_BUF0+REC_BUF1]
+                buf2    = blob[base+REC_HEADER+REC_BUF0+REC_BUF1:
+                              base+REC_HEADER+REC_BUF0+REC_BUF1+REC_BUF2]
+                recs.append({
+                    "counter": counter, "arg0": a0, "arg1": a1, "arg2": a2,
+                    "buf0_hex": buf0.hex(),
+                    "buf1_hex": buf1.hex(),
+                    "buf2_hex": buf2.hex(),
+                })
+            return recs
+
+        pre_records  = _parse_blob(pre_blob,  n_pre)
+        post_records = _parse_blob(post_blob, n_post)
 
         return {
             "wasm_sha256":   info["wasm_sha256"],
             "entry_fn":      entry_fn,
+            "body_size":     body_size,
+            "early_returns": early_returns,
             "jwt":           jwt,
             "token":         token,
-            "n_recs":        n_recs,
-            "n_recs_total":  n_recs_total,
-            "records":       records,
-            "after_snapshot": after,
+            "n_pre":         n_pre,
+            "n_pre_total":   n_pre_total,
+            "n_post":        n_post,
+            "n_post_total":  n_post_total,
+            "pre_records":   pre_records,
+            "post_records":  post_records,
         }
     finally:
         try:
@@ -575,160 +758,123 @@ def run(version: str | None = None) -> dict:
 
 
 # --------------------------------------------------------------------
-# Analysis: identify key/plaintext/output among arg0,arg1,arg2
+# Diff / msgpack analysis
 # --------------------------------------------------------------------
-def analyze(out: dict, expected_n_key_hex: str | None) -> dict:
-    recs = out["records"]
-    if not recs:
-        return {"verdict": "no records captured"}
+def analyze_diff(out: dict) -> dict:
+    """Compare pre vs post buffers for each matching call. Classify
+    each buf as plaintext / ciphertext / unchanged. Try msgpack on the
+    plaintext-looking side."""
+    pre  = out.get("pre_records",  [])
+    post = out.get("post_records", [])
 
-    arg_label = {0: "arg0", 1: "arg1", 2: "arg2"}
-    buf_label = {0: "buf0_pre_hex", 1: "buf1_pre_hex", 2: "buf2_pre_hex"}
+    try:
+        import msgpack  # type: ignore
+        have_msgpack = True
+    except Exception:
+        msgpack = None
+        have_msgpack = False
 
-    # Distinguish pointers from small integers (lengths). Valid wasm
-    # linear-memory pointers in this build live at >= ~64K (memory base
-    # offset). A value < 65536 is overwhelmingly likely a length, an
-    # enum tag, or an offset.
-    PTR_THRESHOLD = 65536
-    arg_kind = {}     # 0=>'ptr', 0=>'small_int', etc
-    for i in (0, 1, 2):
-        vals = [r[arg_label[i]] for r in recs]
-        all_ptr  = all(v >= PTR_THRESHOLD for v in vals)
-        all_small = all(v < PTR_THRESHOLD for v in vals)
-        if all_ptr:    arg_kind[i] = "pointer"
-        elif all_small: arg_kind[i] = "small_int"
-        else:          arg_kind[i] = "mixed"
-
-    def slice32_hex(rec, i):
-        return rec[buf_label[i]][:64]
-
-    # For pointer args, check first-32B constancy
-    static_first32 = {}
-    for i in (0, 1, 2):
-        if arg_kind[i] != "pointer":
-            continue
-        vals = {slice32_hex(r, i) for r in recs}
-        if len(vals) == 1:
-            static_first32[i] = next(iter(vals))
-
-    expected_norm = (expected_n_key_hex or "").lower()
-    matches_expected = {i: (sl == expected_norm)
-                        for i, sl in static_first32.items()}
-
-    # KEY ARG: pointer whose first 32B is constant across calls
-    # (the AES master key is build-static)
-    key_arg = None
-    # First try expected-key match; fall back to "any static 32B"
-    for i, sl in static_first32.items():
-        if sl == expected_norm:
-            key_arg = i
-            break
-    if key_arg is None:
-        # No expected-key match (n_key has rotated from data/keys.json).
-        # Pick the SHORTEST-named ptr-arg with static first-32B —
-        # canonical Rust calling convention puts the &self / &key first.
-        for i in (0, 1, 2):
-            if i in static_first32:
-                key_arg = i
-                break
-
-    # Text-score heuristic for plaintext detection
-    def text_score_of(hex_str: str) -> int:
-        try:
-            b = bytes.fromhex(hex_str)
-        except Exception:
-            return 0
-        return sum(1 for x in b[:128] if 0x20 <= x < 0x7f
+    def _text_score(b: bytes, n: int = 256) -> int:
+        return sum(1 for x in b[:n] if 0x20 <= x < 0x7f
                    or x in (9, 10, 13))
 
-    text_score: dict[int, int] = {}
-    for i in (0, 1, 2):
-        if arg_kind[i] != "pointer":
-            text_score[i] = -1  # not a buffer
+    def _entropy(b: bytes) -> float:
+        if not b:
+            return 0.0
+        from collections import Counter
+        cnt = Counter(b)
+        L = len(b)
+        import math
+        return -sum((c / L) * math.log2(c / L) for c in cnt.values())
+
+    results = []
+    for i in range(min(len(pre), len(post))):
+        rp = pre[i]
+        rq = post[i]
+        # Match by arg1 pointer + arg2 length (the relevant buf addr)
+        buf1_pre  = bytes.fromhex(rp["buf1_hex"])
+        buf1_post = bytes.fromhex(rq["buf1_hex"])
+        # Only compare the first `arg2` bytes (the actual buf length)
+        # if arg2 looks like a small length (< REC_BUF1). Otherwise
+        # compare the whole 3072.
+        arg2 = rp["arg2"]
+        if 0 < arg2 <= REC_BUF1:
+            cmp_len = arg2
         else:
-            text_score[i] = sum(text_score_of(r[buf_label[i]]) for r in recs)
+            cmp_len = REC_BUF1
+        n_diff = sum(1 for a, b in zip(buf1_pre[:cmp_len],
+                                        buf1_post[:cmp_len]) if a != b)
+        # First diff offset
+        first_diff = -1
+        for j in range(cmp_len):
+            if buf1_pre[j] != buf1_post[j]:
+                first_diff = j; break
+        pre_text  = _text_score(buf1_pre[:cmp_len])
+        post_text = _text_score(buf1_post[:cmp_len])
+        pre_ent   = _entropy(buf1_pre[:cmp_len])
+        post_ent  = _entropy(buf1_post[:cmp_len])
 
-    # PLAINTEXT_ARG: pointer arg other than key whose buffer varies
-    # across calls AND has text-like content (JSON/msgpack/serde bytes)
-    pt_arg = None
-    pt_candidates = []
-    for i in (0, 1, 2):
-        if arg_kind[i] != "pointer" or i == key_arg:
-            continue
-        varies = len({slice32_hex(r, i) for r in recs}) > 1
-        pt_candidates.append((i, text_score[i], varies))
-    pt_candidates.sort(key=lambda x: (-x[1], not x[2]))
-    if pt_candidates:
-        pt_arg = pt_candidates[0][0]
+        # Try msgpack on plaintext-looking side
+        msgpack_side = None
+        msgpack_pre  = None
+        msgpack_post = None
+        if have_msgpack:
+            try:
+                msgpack_pre = msgpack.unpackb(buf1_pre[:cmp_len],
+                                              raw=False, strict_map_key=False)
+            except Exception as e:
+                msgpack_pre = f"ERR:{type(e).__name__}:{str(e)[:80]}"
+            try:
+                msgpack_post = msgpack.unpackb(buf1_post[:cmp_len],
+                                               raw=False, strict_map_key=False)
+            except Exception as e:
+                msgpack_post = f"ERR:{type(e).__name__}:{str(e)[:80]}"
 
-    # OUTPUT_ARG: the remaining ptr arg (if any). Compare its PRE buffer
-    # to AFTER snapshot to confirm post-encrypt change.
-    out_arg = None
-    for i in (0, 1, 2):
-        if arg_kind[i] == "pointer" and i not in (key_arg, pt_arg):
-            out_arg = i
-            break
+        # Decide which side is "plaintext-shaped"
+        plaintext_side = None
+        if isinstance(msgpack_pre, (dict, list)) and \
+           not isinstance(msgpack_post, (dict, list)):
+            plaintext_side = "pre"
+        elif isinstance(msgpack_post, (dict, list)) and \
+             not isinstance(msgpack_pre, (dict, list)):
+            plaintext_side = "post"
+        elif pre_ent < post_ent - 0.5:
+            plaintext_side = "pre"
+        elif post_ent < pre_ent - 0.5:
+            plaintext_side = "post"
 
-    # Verify output: did the bytes at out_arg's pointer change from PRE
-    # to AFTER? (true = it was an output)
-    output_changed = None
-    if out_arg is not None:
-        # Take FIRST record (after snapshot is from the live mem at the
-        # end of all 226 calls, so only meaningful for the latest call).
-        last = recs[-1]
-        ptr = last[arg_label[out_arg]]
-        pre = last[buf_label[out_arg]]
-        after = out.get("after_snapshot", {}).get(str(ptr)) \
-                or out.get("after_snapshot", {}).get(ptr)
-        if after:
-            # Compare the leading bytes that overlapped (256B PRE vs
-            # 512B AFTER)
-            n = min(len(pre), len(after))
-            output_changed = pre[:n] != after[:n]
-
+        results.append({
+            "call":            i,
+            "arg0":            rp["arg0"],
+            "arg1":            rp["arg1"],
+            "arg2":            rp["arg2"],
+            "cmp_len":         cmp_len,
+            "buf1_pre_head":   buf1_pre[:32].hex(),
+            "buf1_post_head":  buf1_post[:32].hex(),
+            "buf1_pre_eq_post": n_diff == 0,
+            "n_diff_bytes":    n_diff,
+            "first_diff_off":  first_diff,
+            "pre_text_score":  pre_text,
+            "post_text_score": post_text,
+            "pre_entropy":     round(pre_ent, 3),
+            "post_entropy":    round(post_ent, 3),
+            "msgpack_pre":     str(msgpack_pre)[:500],
+            "msgpack_post":    str(msgpack_post)[:500],
+            "plaintext_side":  plaintext_side,
+        })
     return {
-        "arg_kind":       {arg_label[i]: arg_kind[i] for i in (0, 1, 2)},
-        "arg_values_per_call": [
-            {arg_label[i]: r[arg_label[i]] for i in (0, 1, 2)}
-            for r in recs
-        ],
-        "static_first_32B_per_arg":  {arg_label[i]: sl
-                                       for i, sl in static_first32.items()},
-        "first_32B_matches_expected_n_key": {
-            arg_label[i]: v for i, v in matches_expected.items()},
-        "text_score_per_arg":        {arg_label[i]: text_score[i]
-                                       for i in (0, 1, 2)},
-        "assignment": {
-            "key_arg":       arg_label.get(key_arg) if key_arg is not None else None,
-            "plaintext_arg": arg_label.get(pt_arg)  if pt_arg  is not None else None,
-            "output_arg":    arg_label.get(out_arg) if out_arg is not None else None,
-        },
-        "output_pre_eq_after":   not output_changed if output_changed is not None else None,
-        "key_first_32B_hex":     (static_first32.get(key_arg)
-                                  if key_arg is not None else None),
-        "expected_n_key_hex":    expected_n_key_hex,
+        "have_msgpack": have_msgpack,
+        "per_call":     results,
     }
 
 
 def main():
     out = run()
-    log = Logger()
-    # Load expected n_key
-    try:
-        with open(os.path.join(ROOT, "data", "keys.json")) as f:
-            keys = json.load(f)
-        expected_n_key = keys["hsw"]["n_key"]
-    except Exception:
-        expected_n_key = None
-    out["analysis"] = analyze(out, expected_n_key)
-
+    out["diff_analysis"] = analyze_diff(out)
     save = os.path.join(THIS, "instrument_encrypt_entry.last.json")
-    # Truncate records for save (keep only first 16 records for size)
-    save_out = dict(out)
-    save_out["records"] = out["records"][:16]
     with open(save, "w") as f:
-        json.dump(save_out, f, indent=2)
-    print(json.dumps(out["analysis"], indent=2))
+        json.dump(out, f, indent=2)
+    print(json.dumps(out["diff_analysis"], indent=2))
     print(f"saved -> {save}")
     return 0
 

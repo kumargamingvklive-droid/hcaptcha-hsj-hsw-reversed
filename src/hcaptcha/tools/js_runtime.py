@@ -18,6 +18,7 @@ Usage:
 """
 import json
 import os
+import shutil
 import subprocess
 import threading
 import time
@@ -32,13 +33,32 @@ _RUNNER_PATH = os.path.join(
 
 class JsRuntime:
     def __init__(self, ready_timeout: float = 30.0):
-        self._proc = subprocess.Popen(
-            ["node", _RUNNER_PATH],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            bufsize=0,
-        )
+        # Fail fast with an actionable message if the toolchain is missing,
+        # instead of a cryptic "process terminated" later on.
+        if shutil.which("node") is None:
+            raise RuntimeError(
+                "Node.js ('node') was not found on PATH. The hsj/hsw "
+                "extractors need Node 18+ with jsdom + canvas installed "
+                "(`npm install` in the repo root). Install Node and retry."
+            )
+        node_modules = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(
+                os.path.dirname(os.path.abspath(__file__))))), "node_modules")
+        if not os.path.isdir(os.path.join(node_modules, "jsdom")):
+            raise RuntimeError(
+                "Node dependency 'jsdom' is missing. Run `npm install` in "
+                "the repository root before using the live extractors."
+            )
+        try:
+            self._proc = subprocess.Popen(
+                ["node", _RUNNER_PATH],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                bufsize=0,
+            )
+        except (FileNotFoundError, OSError) as e:
+            raise RuntimeError(f"failed to launch Node sandbox: {e}") from e
         self._lock = threading.Lock()
         self._next_id = 1
         self._closed = False

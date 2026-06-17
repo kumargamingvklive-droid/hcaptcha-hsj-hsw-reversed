@@ -20,6 +20,25 @@ permissions:
   contents: read
 
 jobs:
+  # Fast, hermetic unit tests — no network, no Node, no live build.
+  # These stay green when hCaptcha rotates its bundle (unlike `smoke`).
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install deps
+        run: pip install pycryptodome xxhash msgpack jsbeautifier requests pytest
+      - name: Run unit tests
+        run: python -m pytest tests/ -q
+
+  # Live end-to-end smoke test (depends on the current hCaptcha build +
+  # network + Node/jsdom). May go red on build rotation / CDN hiccups;
+  # the `unit` job above is the authoritative correctness gate.
   smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 10

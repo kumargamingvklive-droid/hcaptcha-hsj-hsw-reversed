@@ -10,37 +10,33 @@ Returns up to SEVEN AES-256 master keys per build:
   From hsw.js (the proof-of-work / AEAD WASM bundle):
     * encrypt_key            — encrypts request payloads via window.hsw(1, ...)
     * decrypt_key            — decrypts server responses via window.hsw(0, ...)
-    * n_key                  — runtime-traced N-key bytes captured at the
-                               byte-store helper that fires during the
-                               n-token derivation (see APPROACH A in
-                               ``hcaptcha.hsw_n_key_runtime``).
-    * fingerprint_blob_key   — deterministic SHA-256 identifier of the
-                               captured byte-store trace (base_ptr +
-                               step bytes) — usable as a fingerprint of
-                               which derivation site / sequence the
-                               build is currently emitting.
+    * n_key                  — the 32-byte AES master-key buffer captured
+                               directly at the n-token AES encrypt entry
+                               (arg0), read at the moment the bundle
+                               invokes its key schedule. Build-static:
+                               identical across warmup + JWT calls and
+                               across every record in the ring. See
+                               ``hcaptcha.hsw_n_key_capture``.
+    * fingerprint_blob_key   — deterministic ``SHA-256(hsw.n_key)``; a
+                               per-build identifier.
 
 Verification status per key:
   - HSJ keys:                AST-patched key-schedule stack frame; the
                              bundle's own AES output is the witness.
   - HSW encrypt/decrypt:     AES-256-GCM round-trip against the live
                              bundle (mathematically verified).
-  - HSW n_key (partial):     verified by comparing the recovered step
-                             bytes against the equivalent positions in
-                             ``hsj.n_key``.  On the inspected era (d)
-                             build the runtime trace recovers only a
-                             12-byte slice of the 32-byte key (steps
-                             0..11); bytes 0..1 (the ``key_seed`` lo/hi
-                             prefix) and bytes 14..31 are not visible
-                             through this trace point because the
-                             current build mixes a runtime input
-                             (likely ``Math.round(Date.now()/1000)``)
-                             into the LCG seed.  We ship the partial
-                             bytes honestly rather than padding with
-                             zeros and pretending to a full key.
-  - HSW fingerprint_blob_key: structural — equals SHA-256(base_ptr ||
-                             step_bytes); always reproducible from the
-                             same trace.
+  - HSW n_key:               STRUCTURAL — the 32 bytes are the AES
+                             master-key buffer the bundle feeds into its
+                             n-token key schedule, build-static across
+                             all calls/records. The n-token body cipher
+                             is AES-256-CTR (counter ``iv||be32``, see
+                             ``docs/19-ntoken-cipher-solved.md``); the
+                             key is reported as captured but end-to-end
+                             external decryption needs the master in a
+                             usable form (the captured value is fixslice
+                             round-key state, not a standard master).
+  - HSW fingerprint_blob_key: structural — equals SHA-256(hsw.n_key);
+                             always reproducible from the same capture.
 
 USAGE:
     from hcaptcha import KeyFetcher

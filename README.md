@@ -2,7 +2,7 @@
 
 <h1>HCAPTCHA HSJ HSW Reversed</h1>
 
-<p><strong>Byte-accurate master-key extraction for hCaptcha's <code>hsj.js</code> and <code>hsw.js</code> — six build-static AES-256 master keys (all extracted; five have end-to-end encrypt→decrypt verification, the sixth is structurally verified at the AES encrypt call site) plus a per-build fingerprint identifier, in under twenty-five seconds.</strong></p>
+<p><strong>Byte-accurate master-key extraction for hCaptcha's <code>hsj.js</code> and <code>hsw.js</code> — six build-static AES-256 master keys (five end-to-end verified, the sixth captured at the AES encrypt call site) plus a per-build fingerprint identifier, in under twenty-five seconds. The n-token cipher is reverse-engineered to <strong>AES-256-CTR</strong> (<code>iv‖be32</code> counter); see <a href="docs/19-ntoken-cipher-solved.md"><code>docs/19</code></a>.</strong></p>
 
 <p>
   <img src="https://img.shields.io/badge/python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.10+">
@@ -69,14 +69,16 @@ hCaptcha ships two compiled bundles to every browser. Both encrypt their wire tr
 
 This package recovers **six** AES-256 master keys per build, all build-static, plus a deterministic per-build fingerprint identifier — no candidate-guessing, no hardcoded indices. Every build's `hsw.js` randomises its WASM function indices, magic numbers, locals, and stack offsets; the fetcher locates each piece by structural role.
 
-**Verification scope.** Five of the six keys have full end-to-end verification (encrypt → decrypt → match plaintext): the three HSJ keys are bundle-witnessed via AST patch, and `hsw.encrypt_key` / `hsw.decrypt_key` are verified by AES-256-GCM round-trip against the live bundle. The sixth, `hsw.n_key`, is **structurally verified** at the AES encrypt call site (the captured 32 bytes are the same value across every record in the ring and across warmup + JWT calls, read directly from arg0 of the n-token AES encrypt entry), but **end-to-end recovery of the live n-token plaintext under this key remains open** — the wire-format envelope's plaintext-recovery path has not been solved. See [`docs/12-hsw-complete-summary.md`](docs/12-hsw-complete-summary.md) for the precise scope and the remaining open hypotheses.
+**Verification scope.** Five of the six keys have full end-to-end verification (encrypt → decrypt → match plaintext): the three HSJ keys are bundle-witnessed via AST patch, and `hsw.encrypt_key` / `hsw.decrypt_key` are verified by AES-256-GCM round-trip against the live bundle. The sixth, `hsw.n_key`, is captured at the n-token AES encrypt entry and is build-static, but is reported as **captured, not plaintext-verified** (see below).
+
+**The n-token cipher is solved.** It is **AES-256-CTR** with counter block `iv(12) ‖ be32(counter)` — *not* GCM, and not the CFB/two-stage-CTR guesses of earlier write-ups. The plaintext is recoverable for self-generated tokens via [`recover_n_token_plaintext`](src/hcaptcha/hsw_n_token_decrypt.py), and a correct parameterized CTR decryptor ships in the same module. The one open piece is *external* decryption of a third party's token: the per-build n-token master key is never materialised as 32 contiguous bytes — it exists only as transient fixslice round keys in WASM memory — so a turnkey key-extraction step is still missing. Full evidence and the precisely-scoped residual are in [`docs/19-ntoken-cipher-solved.md`](docs/19-ntoken-cipher-solved.md).
 
 | Key | Verification |
 | --- | --- |
 | `hsj.n_key` / `response_decrypt_key` / `payload_encrypt_key` | bundle-witnessed via AST patch |
 | `hsw.encrypt_key` | end-to-end AES-256-GCM round-trip (false-positive rate **2⁻¹²⁸**) |
 | `hsw.decrypt_key` | end-to-end bundle round-trip via `HSWBridge.decrypt` |
-| `hsw.n_key` | **structural** — 32 bytes read from arg0 of the n-token AES encrypt entry (fn 330 on the current build) at the moment the bundle invokes its AES key schedule. Build-static: identical bytes captured across warmup + JWT calls, identical across every record in the ring (`extraction_status = captured-from-f330_a0-Nrecords-static`). Call-graph BFS proves this site is reachable from `ec`/`pc` (the n-token Promise executor path) but **not** from `vc` (the request/response dispatcher) — structurally identifying it as the n-token's AES master key. **End-to-end plaintext recovery of the live n-token under this key is still open** (see [`docs/12`](docs/12-hsw-complete-summary.md) § "Open: n-token plaintext recovery"). |
+| `hsw.n_key` | **captured, not plaintext-verified** — 32 bytes read from arg0 of the n-token AES encrypt entry at the moment the bundle invokes its key schedule. Build-static (identical across warmup + JWT calls and across every record in the ring). The n-token cipher itself is solved (AES-256-CTR, counter `iv‖be32`); but the captured bytes are not a standard AES master that reproduces the keystream, so external decryption still needs a working per-build key extraction. See [`docs/19-ntoken-cipher-solved.md`](docs/19-ntoken-cipher-solved.md). |
 | `hsw.fingerprint_blob_key` | `SHA-256(hsw.n_key)` — deterministic per-build identifier derived from the captured `n_key`. Inherits the `n_key` caveat: structurally derived, not end-to-end verified against any consumer-side output. |
 
 <details>
@@ -117,25 +119,23 @@ This package recovers **six** AES-256 master keys per build, all build-static, p
 }
 ```
 
-`hsw.n_key` is reported `verified: true` in the **structural** sense:
-the bytes are read directly from the AES master-key buffer (arg0 of
-the n-token AES encrypt entry, fn 330 on the current build) at the
-moment the bundle invokes the AES key schedule, and the same 32 bytes
-are observed on every call within a build (warmup + JWT call), proving
-the key is build-static and that it is the value the bundle is feeding
-into its AES encrypt at the n-token site. This is **not** the same as
-end-to-end plaintext recovery. The live n-token does **not** decrypt
-under any AES-GCM wire format we have tried with this key — including
-the user-confirmed HSJ-style trailer `ct(N) ‖ tag(16) ‖ iv(12) ‖ 0x00`
-— so the consumer-side plaintext-recovery path is still open. We
-brute-forced 48 distinct captured 32-byte values × 5 trailer-lengths
-× 2 layouts against the live token and 0 decrypted. Three working
-hypotheses remain (key in fixslice32-bitsliced form needing
-inv-orthogonalize, wrong arg index / wrong KS candidate picked,
-non-trivial outer envelope such as a per-call wrap, length prefix, or
-multi-chunk framing). See
-[`docs/12-hsw-complete-summary.md`](docs/12-hsw-complete-summary.md)
-§ "Open: n-token plaintext recovery" for details.
+`hsw.n_key` is reported as **captured** (the 32 bytes the bundle feeds
+into its n-token AES key schedule, build-static across all calls) — but
+those bytes do **not** themselves reproduce the keystream under standard
+AES, so they are not treated as a plaintext-verified master key.
+
+The n-token **cipher** is nonetheless fully reverse-engineered: it is
+AES-256-CTR with counter block `iv(12) ‖ be32(counter)`, wire format
+`ct(N) ‖ tag(16) ‖ iv(12) ‖ ver(0x02)`, no AEAD MAC (the 16-byte tag is
+a separate AES block). The plaintext of any **self-generated** token is
+recoverable directly with `recover_n_token_plaintext` (no key needed),
+and a correct CTR decryptor is implemented for when a master key is
+available. The remaining gap is purely the per-build key extraction: the
+n-token master is never materialised as 32 contiguous bytes and its
+fixslice round keys are transient in WASM memory. Full evidence,
+including a validated RustCrypto-`fixslice32` port and the precisely
+bounded residual, is in
+[`docs/19-ntoken-cipher-solved.md`](docs/19-ntoken-cipher-solved.md).
 
 </details>
 
@@ -354,6 +354,8 @@ hcaptcha-hsj-hsw-reversed/
 | [`docs/11-hsw-function-map.md`](docs/11-hsw-function-map.md) | Per-function role labels (`hsw_function_labels.json`) |
 | [`docs/12-hsw-complete-summary.md`](docs/12-hsw-complete-summary.md) | Canonical end-to-end HSW summary (6 keys + PoW + dispatcher) |
 | [`docs/13-hsw-rust-crates.md`](docs/13-hsw-rust-crates.md) | Rust-crate inventory + complete XOR-keys & obfuscation-constants reference |
+| [`docs/16-function-inventory.md`](docs/16-function-inventory.md) | Comprehensive per-function inventory (crypto primitives + roles) |
+| [`docs/19-ntoken-cipher-solved.md`](docs/19-ntoken-cipher-solved.md) | **The n-token cipher, solved: AES-256-CTR (`iv‖be32`), evidence, and the precisely-scoped key residual** |
 | [`deobfuscated/`](deobfuscated/) | Frozen, fully-deobfuscated HSW + HSJ JS bundles + the extracted WASM blob (regenerable via `tools/deobf.py`) |
 
 ---

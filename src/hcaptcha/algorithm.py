@@ -1,3 +1,13 @@
+"""Legacy / reference crypto helpers for the HSJ side.
+
+NOTE: This module is **not** imported by the main extraction path
+(``KeyFetcher`` and friends). It is a self-contained reference
+implementation kept for the legacy hsj wire format
+(``ct || tag(16) || iv(12) || 0x00`` AES-256-GCM via ``HSJEncryption``)
+plus the custom list ``Encoding`` and ``Hash`` helpers. Behaviour is
+pinned by ``tests/test_algorithm.py``. Prefer ``hcaptcha.hsw_crypto`` and
+``hcaptcha.hsw_n_token_decrypt`` for current work.
+"""
 import hashlib, xxhash, json, zlib, time, random, base64, string, msgpack
 from Crypto.Random import get_random_bytes
 from urllib.parse import unquote, quote

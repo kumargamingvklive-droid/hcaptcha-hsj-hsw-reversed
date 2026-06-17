@@ -1,5 +1,8 @@
 # HSW — complete reverse engineering summary
 
+> **Update (2026-06):** the n-token cipher is solved — **AES-256-CTR**, counter `iv‖be32`. The n-token sections below are superseded by [`19-ntoken-cipher-solved.md`](19-ntoken-cipher-solved.md), which is authoritative for the cipher and the key residual.
+
+
 This document is the canonical reference for everything we know about
 `hsw.js` after the full reverse engineering effort.
 

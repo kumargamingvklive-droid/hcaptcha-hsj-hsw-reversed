@@ -188,6 +188,13 @@ hsw_master_key*.json
 hcaptcha_master_keys.json
 *.bin
 *.wasm
+# Large regenerable WASM disassembly / memory dumps (100MB+; never commit)
+*.wat
+*.mem.json
+current_capture.json
+current_hsw.*
+fn*.wat
+fn*_callgraph.json
 tools/_archive_cache/
 data/hsw.js
 data/hsw_pretty.js
@@ -203,12 +210,17 @@ tools/capture_ntoken_key.last.json
 /examples/hsj_deobf.*
 
 # Ephemeral decrypt-investigation artifacts (regenerable by re-running the scripts)
-tools/decrypt_ntoken_v*.last.json
-tools/decrypt_ntoken_v*.run.log
-tools/instrument_encrypt_entry.last.json
-tools/memdiff_ntoken.last.json
-tools/recover_keystream.patched.wasm
-tools/recover_keystream.capture.json
+# Any *.last.json / *.run.log / *.capture.json under tools/ is a captured
+# run artifact, not source — always regenerable.
+tools/*.last.json
+tools/*.run.log
+tools/*.capture.json
+tools/capture_*.json
+tools/*.patched.wasm
 tools/recover_keystream.analysis.json
-tools/instrument_encrypt_entry.last.json
-tools/memdiff_ntoken.last.json
+
+# Regenerable deobfuscated working copy (canonical copies live in deobfuscated/)
+deobfuscated_current/
+
+# Local Claude Code harness state
+.claude/

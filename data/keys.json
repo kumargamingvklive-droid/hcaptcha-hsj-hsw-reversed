@@ -11,17 +11,31 @@
     "n_key": "5fa72a8cea2085a9c961c42ab792eda8203a35199a6955fae7deac508bdb07a8",
     "fingerprint_blob_key": "43a6a89ddc603136ba8322a2d0ccda2fb8f1334c6fa1f729b12d8fa253c0e592"
   },
-  "cipher": "AES-256-GCM",
+  "_stale_warning": "This snapshot is asset version 022108385d… — STALE. Current encrypt/decrypt keys rotate per version (e.g. 67b2bed3…/55d46e54… on d22bc961…). Regenerate with `python -m hcaptcha.hsw` before use.",
+  "cipher": {
+    "vc_encrypt_req_data": "AES-256-GCM (vc magic 1283447249, key schedule fn452)",
+    "vc_decrypt_resp_data": "AES-256-GCM (vc magic -317621455)",
+    "n_token": "AES-256-GCM (96-bit IV). Keystream = AES-CTR with counter block iv(12)||be32(i); GCM J0 = iv||be32(1) (call0 input 0^128 -> output = GHASH subkey H), encryption counters start at i=2. DISTINCT third key, built by WASM export `rc` (window.hsw(jwt)); SOLVED — see docs/19-ntoken-cipher-solved.md and `n_token_master` below."
+  },
+  "n_token_master": {
+    "build_wasm_sha256": "b6f4201d8214...",
+    "master_key_hex": "b89b3c6b02fa9b606c9dbee2b8b79dd83e1923698b53b10e4c6a7e3fab451a21",
+    "recovery": "hcaptcha.hsw_n_token_decrypt.recover_ntoken_master_live() — deobf-capture the n-token AES fn's bitsliced round-key array (arg0, 120 words) on its first call, invert the fixslice key schedule (M[:16]=inv_bitslice(rk0); M[16:]=inv_bitslice(shift_rows_1(sub_bytes_nots(rk1)))).",
+    "verified": "TWO independent checks: (1) full AES-256 key schedule of the recovered master reproduces all 120/120 captured round-key words; (2) AES-256(M, iv||be32(counter)) == the live cipher's actual keystream output for 198/198 blocks (token1) and 118/118 blocks of an INDEPENDENT second token (different iv) -> proves third-party decryption.",
+    "note": "The master is a BUILD CONSTANT (same for every n-token of a given asset build) and rotates when the asset build rotates, like the vc encrypt/decrypt keys. The VALUE above is for build b6f4201d; re-run recover_ntoken_master_live() per build. The recovery is self-verifying (returns None unless 120/120 schedule match), so it never emits a fabricated key."
+  },
   "wire_format": {
     "hsj": "ct(N) || tag(16) || iv(12) || 0x00",
-    "hsw": "iv(12) || ct(N) || tag(16)"
+    "hsw_vc": "iv(12) || ct(N) || tag(16)",
+    "hsw_n_token": "ct(N) || tag(16) || iv(12) || ver(0x02)"
   },
   "aad": "",
   "verified": {
-    "hsw_encrypt_key": true,
-    "hsw_decrypt_key": true,
-    "hsw_n_key": true,
-    "hsw_fingerprint_blob_key": true
+    "hsw_encrypt_key": "GCM round-trip (for the version in this file)",
+    "hsw_decrypt_key": "GCM round-trip (for the version in this file)",
+    "hsw_n_key": "SOLVED — see n_token_master. Recovered + verified against the live keystream (120/120 schedule + 198/198 + independent-token 118/118 blocks). The OLD `hsw.n_key` value below is a different (unrelated) capture and is NOT the n-token key.",
+    "hsw_n_key_note": "RESOLVED. The n-token AES-256 master is recovered by inverting the fixslice round-key array the cipher reads (recover_ntoken_master_live). The `rc`-path key is expanded into deobf-obfuscated bitsliced round keys; capturing arg0 (the rk array) on the n-token AES fn and inverting the schedule yields the master, self-verified by a 120/120 schedule match. See docs/19 Update 7.",
+    "hsw_fingerprint_blob_key": "unverified (derived = sha256(n_key); n_key itself unverified)"
   },
   "extraction_status": {
     "hsw_n_key": "captured-from-f437_a0-178records-static",

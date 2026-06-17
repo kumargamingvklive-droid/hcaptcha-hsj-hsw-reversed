@@ -1,5 +1,8 @@
 # HSW N-key derivation — direct AES-site capture (current) and the legacy LCG path
 
+> **Update (2026-06):** the n-token cipher is solved — **AES-256-CTR**, counter `iv‖be32`. The n-token sections below are superseded by [`19-ntoken-cipher-solved.md`](19-ntoken-cipher-solved.md), which is authoritative for the cipher and the key residual.
+
+
 The HSW bundle's third `window.hsw(...)` path takes a JWT and emits a
 "PoW token" whose `n` field is an AES-256-GCM-encrypted blob produced
 inside the WASM module. This file documents how we recover the AES

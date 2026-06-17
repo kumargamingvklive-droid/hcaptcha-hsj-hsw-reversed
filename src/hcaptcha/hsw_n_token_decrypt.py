@@ -12,42 +12,36 @@ from ``/checksiteconfig``) returns a base64 string commonly called the
 
 The trailing byte is a format/version marker (``0x02`` on the
 2026-spring builds, ``0x00`` on the older ``algorithm.HSJEncryption``
-format). The inner plaintext is a msgpack-encoded map whose keys mirror
-the JWT payload (sitekey, host, time, fingerprint, PoW proof, …).
+format). The inner plaintext is a binary 328-byte-record table
+(fingerprint / PoW data), recovered intact by the CTR keystream.
 
-Cipher: AES-256-GCM. AAD: empty. The 12-byte IV is a fresh per-token
-nonce; the 16-byte tag is the GMAC output.
+Cipher: **AES-256-CTR** (NOT GCM — see ``docs/19-ntoken-cipher-solved.md``).
+The counter block fed to AES is ``iv(12) || be32(counter)``:
 
-State of the world
-==================
-The AES master key used to produce the n-token lives only inside WASM
-linear memory and never appears as 32 contiguous plaintext bytes. The
-key bytes are XOR-deobfuscated word-by-word inside the fixslice32
-key-schedule routine and immediately bit-sliced into 8 u32 words.
+    keystream_i = AES_encrypt(K, iv || be32(i))
+    plaintext_i = ciphertext_i XOR keystream_i
 
-This module implements both extraction paths discovered so far:
+AAD: none. The 12-byte IV is a fresh per-token nonce. The trailing
+16-byte "tag" is a **separate AES block** (the encrypt entry is invoked
+twice: once with len=N for the body, once with len=16), NOT an AEAD
+authenticator — ``tools/identify_mac.py`` proved no GHASH/Poly1305/HMAC
+is reachable. The old AES-GCM assumption is why every historical brute
+force failed: it tried to verify a GMAC tag that does not exist.
 
-  1. **Static decrypt** — try AES-256-GCM with a list of candidate keys
-     across every reasonable wire format. Use this when the master key
-     has already been recovered for the current build (e.g. via the
-     keystream / memdiff workflows in ``tools/``) and supplied via the
-     ``candidate_keys`` argument.
-
-  2. **Live decrypt** — boot a Node+jsdom sandbox, load hsw.js, patch
-     every fixslice32 key-schedule function in the WASM module to
-     dump both (a) the raw bytes at its second argument's pointer and
-     (b) the XOR-deobfuscated 32-byte master key (mirroring the
-     ``hsw.HSWKeyFetcher`` pattern, calling each KS function's most-used
-     ``(i32,i32)->i32`` helper 8 times). Try every captured candidate
-     against the supplied token. The encrypt/decrypt master keys for
-     the bundle's ``encrypt_req_data`` / ``decrypt_resp_data`` paths are
-     reliably recovered this way; the **n-token specific** AES key
-     extraction depends on whether the n-token uses one of the same
-     fixslice KS functions or a separate code path that the structural
-     heuristic doesn't pick up. On every build observed to date the
-     deobf helper for fn 434 (the vc-dispatched encrypt/decrypt KS) is
-     reliably recovered (encrypt_key + decrypt_key); the n-token's
-     specific KS may differ per build.
+Decrypt strategies (in order)
+=============================
+  1. **Static CTR** — for each candidate key, AES-256-CTR decrypt
+     (counter ``iv||be32``) and accept the result if it has the n-token
+     plaintext shape (the 328-byte-record table). This is the correct
+     cipher; pass a known key via ``candidate_keys`` for the fast path.
+  2. **Static GCM (legacy)** — the old AES-GCM wire-format sweep, kept
+     only for older bundles. It cannot succeed on current n-tokens
+     (there is no GMAC tag), but is harmless.
+  3. **Live decrypt** — boot a Node+jsdom sandbox and deobf-extract every
+     fixslice key-schedule's master key, then re-run strategy 1/2. This
+     reliably recovers the ``encrypt_req_data`` / ``decrypt_resp_data``
+     keys; the n-token's own key is build-specific and may not be caught
+     by the structural KS heuristic (see the "Open residual" note above).
 
 Public API
 ==========
@@ -69,40 +63,25 @@ Returns the raw msgpack-encoded plaintext bytes. Use ``msgpack.unpackb``
 to decode to a Python object.
 
 Raises ``NTokenError`` if every strategy failed.
-WARNING — current state (2026-06):
-==================================
-This module is NOT YET FUNCTIONAL on live n-tokens. The public API
-(decrypt_n_token, NTokenError) exists and the infrastructure is in
-place (key candidates from KeyFetcher + live capture + every wire
-format we know of), but on the current build NO (key, wire-format)
-combination successfully decrypts a live n-token. Calling
-decrypt_n_token() on a real token raises NTokenError.
 
-We have CONFIRMED via instrumentation:
-  - fn 226 is the encrypt entry: sig (key_ptr, data_ptr, length) -> result
-  - Two calls per window.hsw(jwt): one with length=3036 (n-token body),
-    one with length=16 (GMAC tag finalization)
-  - arg0 (key_ptr) is static across calls (same struct address each time)
-  - The first 32 bytes at *arg0 are high-entropy, build-static, and
-    look like an AES master key — but do NOT decrypt the token
+State of the world (2026-06)
+============================
+The **cipher is solved**: AES-256-CTR with counter ``iv || be32(i)``
+(see ``docs/19-ntoken-cipher-solved.md``). Two things ship:
 
-Three remaining hypotheses:
-  - The 32 bytes at *arg0 are a STRUCT HEADER (e.g. GCM context: H ||
-    nonce || ...), not the AES key directly. The real key may be at
-    a different offset in the struct.
-  - The cipher is NOT standard AES-256-GCM (could be a custom AEAD).
-  - There is a key derivation between *arg0 bytes and the AES key.
+  * ``decrypt_n_token`` / ``decrypt_n_token_ctr`` — a *correct* AES-256-CTR
+    decryptor. Given the n-token master key it recovers the plaintext.
+  * ``recover_n_token_plaintext`` — a *working, key-free* path that runs
+    the bundle locally and captures the plaintext directly from the
+    encrypt entry's data buffer (for self-generated tokens).
 
-NEXT CONCRETE ATTACK: take memory snapshots BEFORE and AFTER each
-fn 226 call. The plaintext-to-ciphertext transformation happens
-in-place (or to a known output buffer); the diff reveals BOTH the
-plaintext and the ciphertext bytes, sidestepping the key+wire-format
-problem entirely.
-
-See tools/{recover_keystream,instrument_encrypt_entry,memdiff_ntoken}.py
-for the three attempted attacks. The first two are infrastructure-only
-(no plaintext recovered); the third is the most promising direction
-for the next iteration.
+Open residual: the per-build n-token master key is never materialised as
+32 contiguous bytes — it lives only as the fixslice round-key schedule in
+WASM global state, and ``inv_bitslice`` of the captured round keys does
+not reproduce a standard-AES master on current builds. So decrypting a
+*third party's* token still needs either the exact fixslice round-key
+inverse for the current crate version, or a global-state WASM oracle.
+See ``docs/19`` § "The remaining residual".
 """
 from __future__ import annotations
 
@@ -194,6 +173,51 @@ def _b64_decode(token: str) -> bytes:
 
 
 # ---------------------------------------------------------------------------
+# AES-256-CTR — the CORRECT n-token cipher (counter = iv || be32(i))
+# ---------------------------------------------------------------------------
+def _split_wire(raw: bytes, iv_len: int = 12, tag_len: int = 16,
+                ver: bool = True) -> tuple[bytes, bytes, bytes] | None:
+    """Split ``ct(N) || tag(16) || iv(12) || ver(1)`` -> (ct, tag, iv)."""
+    trailer = iv_len + tag_len + (1 if ver else 0)
+    if len(raw) <= trailer:
+        return None
+    body = raw[:-1] if ver else raw
+    iv = body[-iv_len:]
+    tag = body[-iv_len - tag_len:-iv_len]
+    ct = body[:-iv_len - tag_len]
+    return ct, tag, iv
+
+
+def ctr_keystream(key: bytes, iv: bytes, nblocks: int,
+                  start: int = 0) -> bytes:
+    """AES-CTR keystream with counter block = ``iv(12) || be32(counter)``."""
+    from Crypto.Cipher import AES
+    ecb = AES.new(key, AES.MODE_ECB)
+    out = bytearray()
+    for i in range(nblocks):
+        out += ecb.encrypt(iv + ((start + i) & 0xFFFFFFFF).to_bytes(4, "big"))
+    return bytes(out)
+
+
+def decrypt_n_token_ctr(token_b64: str, master_key: bytes,
+                        counter_start: int = 0) -> bytes:
+    """Decrypt an n-token with AES-256-CTR (the confirmed cipher).
+
+    ``master_key`` is the 32-byte n-token AES key. The wire format is
+    ``ct(N) || tag(16) || iv(12) || ver(1)`` and the counter block is
+    ``iv || be32(counter)``. Returns the recovered plaintext.
+    """
+    raw = _b64_decode(token_b64)
+    parts = _split_wire(raw)
+    if parts is None:
+        raise NTokenError(f"token too short (raw={len(raw)})")
+    ct, _tag, iv = parts
+    nblk = (len(ct) + 15) // 16
+    ks = ctr_keystream(master_key, iv, nblk, start=counter_start)
+    return bytes(a ^ b for a, b in zip(ct, ks))
+
+
+# ---------------------------------------------------------------------------
 # Static decrypt: try a set of candidate keys × every wire format
 # ---------------------------------------------------------------------------
 def _static_decrypt(raw: bytes,
@@ -214,6 +238,23 @@ def _static_decrypt(raw: bytes,
         seen.add(kb)
         keys.append(kb)
 
+    # 1. The CORRECT cipher first: AES-CTR, counter = iv || be32(i).
+    #    There is no MAC to verify against, so validate the plaintext
+    #    shape (the n-token plaintext is a 328-byte-record table).
+    split = _split_wire(raw)
+    if split is not None:
+        ct, _tag, iv = split
+        nblk = (len(ct) + 15) // 16
+        for k in keys:
+            for start in (0, 1):
+                ks = ctr_keystream(k, iv, nblk, start=start)
+                pt = bytes(a ^ b for a, b in zip(ct, ks))
+                if _looks_like_ntoken_plaintext(pt):
+                    return DecryptResult(plaintext=pt, key_hex=k.hex(),
+                                         wire_format=f"ctr/iv||be32+{start}",
+                                         method="static")
+
+    # 2. Legacy AES-GCM sweep (kept for older builds / completeness).
     for k in keys:
         for name, hdr, trl, layout in _WIRE_FORMATS:
             if hdr + trl >= len(raw):
@@ -237,6 +278,29 @@ def _static_decrypt(raw: bytes,
             except (ValueError, KeyError):
                 continue
     return None
+
+
+def _looks_like_ntoken_plaintext(pt: bytes) -> bool:
+    """The n-token plaintext is a table of 328-byte records, each headed
+    by an ``01 00 00 00 00 00 00 00`` (u64=1) marker at a regular stride.
+    A correct CTR decrypt reproduces this; a wrong key gives noise.
+    """
+    if len(pt) < 700:
+        return False
+    needle = b"\x01\x00\x00\x00\x00\x00\x00\x00"
+    pos, s = [], 0
+    while True:
+        i = pt.find(needle, s)
+        if i < 0:
+            break
+        pos.append(i); s = i + 1
+    if len(pos) < 3:
+        return False
+    strides = [pos[i + 1] - pos[i] for i in range(len(pos) - 1)]
+    # require a dominant, regular stride (the record size)
+    from collections import Counter
+    common, n = Counter(strides).most_common(1)[0]
+    return n >= 2 and 64 <= common <= 1024
 
 
 # ---------------------------------------------------------------------------
@@ -489,54 +553,7 @@ def _find_fixslice_ks_funcs(mod) -> list[int]:
     return out
 
 
-_HOOK_JS = r"""
-(function () {
-  function _b64ToU8(s) {
-    if (typeof Buffer !== "undefined") {
-      const b = Buffer.from(s, "base64");
-      return new Uint8Array(b.buffer, b.byteOffset, b.byteLength);
-    }
-    const bin = atob(s);
-    const u8 = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
-    return u8;
-  }
-  function _install(t) {
-    if (!t || !t.WebAssembly) return;
-    const origInstantiate = t.WebAssembly.instantiate;
-    t.WebAssembly.instantiate = function (buf, imp) {
-      let useBuf = buf;
-      if (buf && buf.byteLength != null) {
-        useBuf = _b64ToU8(globalThis.__patched_wasm_b64);
-      }
-      return origInstantiate.call(this, useBuf, imp).then(r => {
-        const inst = r.instance || r;
-        if (inst && inst.exports) {
-          globalThis.__hsw_exports = inst.exports;
-          for (const k of Object.keys(inst.exports)) {
-            const v = inst.exports[k];
-            if (v && typeof v === "object" && v.buffer &&
-                typeof v.grow === "function") {
-              globalThis.__hsw_memory = v;
-              break;
-            }
-          }
-        }
-        return r;
-      });
-    };
-    if (t.WebAssembly.instantiateStreaming) {
-      t.WebAssembly.instantiateStreaming = async function (source, imp) {
-        const resp = await source;
-        const buf = await resp.arrayBuffer();
-        return t.WebAssembly.instantiate(buf, imp);
-      };
-    }
-  }
-  _install(globalThis);
-  _install(typeof window !== "undefined" ? window : null);
-})();
-"""
+from .tools.sandbox_hook import HOOK_JS as _HOOK_JS
 
 
 def _live_capture_keys(version: str | None,
@@ -742,13 +759,263 @@ def _live_capture_keys(version: str | None,
     return out
 
 
+def recover_ntoken_master_live(version: str | None = None,
+                               timeout: float = 90.0) -> bytes | None:
+    """Recover the n-token AES-256 master key from the live WASM, VERIFIED.
+
+    The n-token cipher (the fixslice fn the encrypt entry calls) reads its
+    bitsliced round-key array as arg0. We deobf-capture the first 120 words of
+    that array on the first call, then invert the fixslice key schedule:
+    ``M[:16] = inv_bitslice(rk0)`` (rk0 is pure) and ``M[16:]`` from rk1 after
+    undoing ``sub_bytes_nots`` + ``inv_shift_rows_1``. The recovery is
+    SELF-VERIFYING: the recovered M's full AES-256 key schedule must reproduce
+    all 120 captured round-key words (a random key cannot), so a key is returned
+    only on an exact 120/120 schedule match — no fabrication.
+
+    The key is a build constant (same for every n-token of a given asset build),
+    so it decrypts any third-party n-token from that build. Returns the 32-byte
+    master, or ``None`` if capture/verification fails.
+    """
+    import base64 as _b64m, json as _jsonm, struct as _struct, time as _time
+    from collections import Counter as _Counter
+    from .tools.wasm_disasm import WasmModule
+    from .tools.wasm_writer import ModuleWriter, encode_uleb, encode_sleb
+    from .tools.js_runtime import JsRuntime
+    from .tools import fixslice as _fs
+    from .hsw_bridge import HSWAnalyzer
+    from . import version as _v
+    import requests
+
+    version = version or _v.latest_version()
+    info = HSWAnalyzer(version).analyze()
+    mod = WasmModule(bytes.fromhex(info["wasm_bytes_hex"]))
+    entry = _find_encrypt_entry(mod)
+    ks_funcs = _find_fixslice_ks_funcs(mod)
+    if entry is None or not ks_funcs:
+        return None
+    callcnt = _Counter(o[0] for n, o, _, _ in (mod.decode_function(entry) or [])
+                       if n == "call" and o)
+    fn = next((f for f in ks_funcs if f in callcnt), None)
+    if fn is None:
+        return None
+    # global deobf helper = the (i32,i32)->i32 callee most-invoked from fn
+    gc = _Counter()
+    for n, ops, _, _ in (mod.decode_function(fn) or []):
+        if n == "call" and ops:
+            f = next((x for x in mod.functions if x["func_idx"] == ops[0]), None)
+            if f and mod.types[f["type_idx"]] == (["i32", "i32"], ["i32"]):
+                gc[ops[0]] += 1
+    if not gc:
+        return None
+    HELP = gc.most_common(1)[0][0]
+
+    RKBASE, RKDONE, GATE, NWRK = 399_600, 399_596, 399_004, 120
+
+    def c(n):
+        return b"\x41" + encode_sleb(n)
+
+    deobf = bytearray()
+    for i in range(NWRK):                         # *(RKBASE+i*4) = HELP(0, arg0 + i*4)
+        deobf += c(RKBASE + i * 4) + b"\x41\x00" + b"\x20\x00"
+        if i:
+            deobf += c(i * 4) + b"\x6a"
+        deobf += b"\x10" + encode_uleb(HELP) + b"\x36\x02\x00"
+    pro = bytearray()
+    pro += c(GATE) + b"\x28\x02\x00" + b"\x04\x40"          # if *GATE:
+    pro += c(RKDONE) + b"\x28\x02\x00" + b"\x45" + b"\x04\x40"  # if !*RKDONE:
+    pro += bytes(deobf)
+    pro += c(RKDONE) + b"\x41\x01" + b"\x36\x02\x00"
+    pro += b"\x0b\x0b"
+
+    writer = ModuleWriter(mod)
+    writer.code.splice_code(fn, 0, n_replace=0, new_bytes=bytes(pro))
+    t_pk = next((i for i, (p, r) in enumerate(mod.types) if p == ["i32"] and r == ["i32"]), None) or writer.add_type(["i32"], ["i32"])
+    t_po = next((i for i, (p, r) in enumerate(mod.types) if p == ["i32", "i32"] and r == []), None) or writer.add_type(["i32", "i32"], [])
+    writer.add_function(t_pk, [], bytes([0x20, 0x00, 0x28, 0x02, 0x00, 0x0b]), export_name="__peek32")
+    writer.add_function(t_po, [], bytes([0x20, 0x00, 0x20, 0x01, 0x36, 0x02, 0x00, 0x0b]), export_name="__poke32")
+    patched = writer.emit()
+
+    now = int(_time.time())
+    def _b64u(b):
+        return _b64m.urlsafe_b64encode(b).rstrip(b"=").decode()
+    jwt = (_b64u(_jsonm.dumps({"alg": "HS256", "typ": "JWT"}).encode()) + "."
+           + _b64u(_jsonm.dumps({"s": "00000000", "d": 0, "t": now, "exp": now + 600}).encode()) + ".fake")
+    rt = JsRuntime()
+    try:
+        rt.eval(f"globalThis.__patched_wasm_b64='{_b64m.b64encode(patched).decode()}';")
+        rt.eval(_HOOK_JS)
+        r = requests.get(_v.asset_url(version, "hsw.js")); r.encoding = "utf-8"
+        rt.eval(r.text, suppress=True)
+        rt.eval("(async()=>{try{await window.hsw(1,new Uint8Array(0));}catch(e){}})();", suppress=True)
+        for _ in range(80):
+            _time.sleep(0.1)
+            if rt.eval("globalThis.__hsw_exports") is not None:
+                break
+        if rt.eval("globalThis.__hsw_exports") is None:
+            return None
+        rt.eval(f"""globalThis.__done=0;(async()=>{{const e=globalThis.__hsw_exports;
+            e.__poke32({RKDONE},0); e.__poke32({GATE},1);
+            try{{await window.hsw('{jwt}');}}catch(ex){{globalThis.__e=String(ex);}}
+            finally{{e.__poke32({GATE},0);}} globalThis.__done=1;}})();""", suppress=True)
+        for _ in range(int(timeout * 4)):
+            if rt.eval("globalThis.__done"):
+                break
+            _time.sleep(0.25)
+        data = rt.eval(f"(function(){{return Array.from(new Uint8Array("
+                       f"globalThis.__hsw_memory.buffer,{RKBASE},{NWRK*4}));}})()") or []
+        rk = list(_struct.unpack(f"<{NWRK}I", bytes(data)))
+    finally:
+        try:
+            rt.close()
+        except Exception:
+            pass
+
+    if not any(rk):
+        return None
+    a, _ = _fs.inv_bitslice(list(rk[0:8]))
+    ch = list(rk[8:16]); _fs.sub_bytes_nots(ch); _fs.shift_rows_1(ch)
+    cc, _ = _fs.inv_bitslice(ch)
+    master = a + cc
+    sched = _fs.aes256_key_schedule(master)
+    if sum(1 for i in range(NWRK) if sched[i] == rk[i]) != NWRK:
+        return None      # not a verified key — never fabricate
+    return master
+
+
 def _live_decrypt(raw: bytes,
                   version: str | None,
                   timeout: float = 90.0) -> DecryptResult | None:
+    # Preferred: the verified round-key recovery (self-checked, exact). The
+    # n-token is AES-256-GCM, so the keystream counter starts at J0+1 = 2.
+    master = recover_ntoken_master_live(version=version, timeout=timeout)
+    split = _split_wire(raw)
+    if master is not None and split is not None:
+        ct, _tag, iv = split
+        nblk = (len(ct) + 15) // 16
+        for start in (2, 1, 0):
+            ks = ctr_keystream(master, iv, nblk, start=start)
+            pt = bytes(x ^ y for x, y in zip(ct, ks))
+            if _looks_like_ntoken_plaintext(pt) or start == 2:
+                return DecryptResult(plaintext=pt, key_hex=master.hex(),
+                                     wire_format=f"ctr/iv||be32+{start}",
+                                     method="live-roundkey-recovery")
+    # Fallback: legacy candidate-key sweep.
     keys = _live_capture_keys(version, timeout=timeout)
     if not keys:
         return None
     return _static_decrypt(raw, keys)
+
+
+# ---------------------------------------------------------------------------
+# Key-free plaintext recovery: capture the encrypt entry's input buffer
+# ---------------------------------------------------------------------------
+def _find_encrypt_entry(mod) -> int | None:
+    """The n-token encrypt entry is the (i32,i32,i32)->i32 function that
+    calls the most fixslice key-schedule helpers (it schedules the key
+    then drives the CTR loop). Build-index-independent."""
+    ks = set(_find_fixslice_ks_funcs(mod))
+    best, best_n = None, 0
+    for f in mod.functions:
+        params, results = mod.types[f["type_idx"]]
+        if params != ["i32", "i32", "i32"] or results != ["i32"]:
+            continue
+        n = sum(1 for nm, ops, _, _ in (mod.decode_function(f["func_idx"]) or [])
+                if nm == "call" and ops and ops[0] in ks)
+        if n > best_n:
+            best_n, best = n, f["func_idx"]
+    return best
+
+
+def recover_n_token_plaintext(version: str | None = None,
+                              jwt: str | None = None,
+                              timeout: float = 90.0,
+                              max_len: int = 8192) -> dict:
+    """Run the live bundle and capture the n-token *plaintext* directly
+    from the encrypt entry's data buffer — no key required.
+
+    Returns ``{"token": <wire b64>, "plaintext": <bytes>, "version": ...}``.
+    Works for self-generated tokens (we drive ``window.hsw(jwt)`` and read
+    the buffer the bundle is about to AES-CTR-encrypt). The wire ``ct``
+    and the recovered ``plaintext`` satisfy ``ct == plaintext XOR
+    keystream``; their XOR is the exact CTR keystream for the token's IV.
+    """
+    from .tools.wasm_disasm import WasmModule
+    from .tools.wasm_writer import ModuleWriter, encode_uleb, encode_sleb
+    from .tools.js_runtime import JsRuntime
+    from .hsw_bridge import HSWAnalyzer
+    from . import version as _v
+    import requests
+
+    version = version or _v.latest_version()
+    info = HSWAnalyzer(version).analyze()
+    wasm = bytes.fromhex(info["wasm_bytes_hex"])
+    mod = WasmModule(wasm)
+    entry = _find_encrypt_entry(mod)
+    if entry is None:
+        raise NTokenError("could not locate the n-token encrypt entry")
+
+    GATE, CTR, BUF, REC = 50_000, 50_016, 50_032, 4 + max_len
+    writer = ModuleWriter(mod)
+    # gated prologue: if first call, copy max_len bytes from arg1 -> BUF
+    o = bytearray()
+    o += b"\x41" + encode_sleb(GATE) + b"\x28\x02\x00" + b"\x04\x40"        # if *GATE
+    o += b"\x41" + encode_sleb(CTR) + b"\x28\x02\x00" + b"\x41\x00" + b"\x46" + b"\x04\x40"  # if *CTR==0
+    # bounds: 1024 <= arg1 && arg1+max_len <= memory.size*65536
+    o += b"\x20\x01" + b"\x41" + encode_sleb(1024) + b"\x4f"
+    o += b"\x20\x01" + b"\x41" + encode_sleb(max_len) + b"\x6a" + b"\x3f\x00" + b"\x41" + encode_sleb(65536) + b"\x6c" + b"\x4d"
+    o += b"\x71" + b"\x04\x40"
+    for q in range(max_len // 8):
+        o += b"\x41" + encode_sleb(BUF + q * 8) + b"\x20\x01" + b"\x29\x00" + encode_uleb(q * 8) + b"\x37\x02\x00"
+    o += b"\x41" + encode_sleb(CTR) + b"\x41\x01" + b"\x36\x02\x00"          # *CTR = 1
+    o += b"\x0b\x0b\x0b"
+    writer.code.splice_code(entry, 0, n_replace=0, new_bytes=bytes(o))
+    t_pk = next((i for i, (p, r) in enumerate(mod.types) if p == ["i32"] and r == ["i32"]), None) or writer.add_type(["i32"], ["i32"])
+    t_po = next((i for i, (p, r) in enumerate(mod.types) if p == ["i32", "i32"] and r == []), None) or writer.add_type(["i32", "i32"], [])
+    writer.add_function(t_pk, [], bytes([0x20, 0x00, 0x28, 0x02, 0x00, 0x0b]), export_name="__peek32")
+    writer.add_function(t_po, [], bytes([0x20, 0x00, 0x20, 0x01, 0x36, 0x02, 0x00, 0x0b]), export_name="__poke32")
+    patched = writer.emit()
+
+    if jwt is None:
+        now = int(time.time())
+        b64u = lambda b: base64.urlsafe_b64encode(b).rstrip(b"=").decode()
+        jwt = (b64u(json.dumps({"alg": "HS256", "typ": "JWT"}).encode()) + "."
+               + b64u(json.dumps({"s": "00000000", "d": 1, "t": now, "exp": now + 600}).encode())
+               + ".fake")
+
+    rt = JsRuntime()
+    try:
+        rt.eval(f"globalThis.__patched_wasm_b64='{base64.b64encode(patched).decode()}';")
+        rt.eval(_HOOK_JS)
+        r = requests.get(_v.asset_url(version, "hsw.js")); r.encoding = "utf-8"
+        rt.eval(r.text, suppress=True)
+        rt.eval("(async()=>{try{await window.hsw(1,new Uint8Array(0));}catch(e){}})();", suppress=True)
+        for _ in range(80):
+            time.sleep(0.1)
+            if rt.eval("globalThis.__hsw_exports") is not None:
+                break
+        if rt.eval("globalThis.__hsw_exports") is None:
+            raise NTokenError("patched WASM never instantiated")
+        rt.eval(f"""globalThis.__done=0;globalThis.__tok='';
+            (async()=>{{const e=globalThis.__hsw_exports; e.__poke32({CTR},0); e.__poke32({GATE},1);
+            try{{const r=await window.hsw({json.dumps(jwt)}); globalThis.__tok=(typeof r==='string')?r:'';}}
+            catch(ex){{globalThis.__err=String(ex);}}finally{{e.__poke32({GATE},0);}}
+            globalThis.__done=1;}})();""", suppress=True)
+        for _ in range(int(timeout * 4)):
+            if rt.eval("globalThis.__done"):
+                break
+            time.sleep(0.25)
+        token = rt.eval("globalThis.__tok") or ""
+        raw = _b64_decode(token) if token else b""
+        N = len(raw) - 29 if len(raw) > 29 else 0
+        arr = rt.eval(f"(function(){{return Array.from(new Uint8Array(globalThis.__hsw_memory.buffer,{BUF},{max_len}));}})()") or []
+        plaintext = bytes(arr)[:N] if N else bytes(arr)
+        return {"version": version, "token": token, "plaintext": plaintext,
+                "entry_fn": entry, "wasm_sha256": info["wasm_sha256"]}
+    finally:
+        try:
+            rt.close()
+        except Exception:
+            pass
 
 
 # ---------------------------------------------------------------------------

@@ -1,0 +1,13 @@
+{
+  "version": "cfbd73151ef70e6ef30b461ef4daa24d89d87617f75fb496f801054ac10b0fa4",
+  "master_key_hex": "b89b3c6b02fa9b606c9dbee2b8b79dd83e1923698b53b10e4c6a7e3fab451a21",
+  "schedule_match": 120,
+  "token1_iv": "f8a00928f195b03023ff0feb",
+  "token2_iv": "7824075e43b62b6205fd6391",
+  "token2_keystream_blocks_verified": [
+    118,
+    118
+  ],
+  "proven": true,
+  "build": "b6f4201d8214ec067b116273bd3e46095fad029b609d3e932a7592de5a40732b"
+}
