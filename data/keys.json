@@ -1,15 +1,15 @@
 {
-  "version": "2b2977200370f0e8954bf6a60e0b7e0ed2dde1822f43f388347b578e209bb83f",
+  "version": "ac2dee7d39ba5454b9297543327039a5eaef9995700ab76bfab2a50b8ae083db",
   "hsj": {
     "n_key": "fe1ba43f33813dbac034ef12f34f3ee371b09057e2a25346a652c681edb2104b",
     "response_decrypt_key": "2fb5e0f6aab9596b2001c45ce12cad34e82d579dfea24409fe9b7de4b82d4028",
     "payload_encrypt_key": "b2837807eecf9221db94d24337f122d093f70c93efb7d7fc1356e57363e27e28"
   },
   "hsw": {
-    "encrypt_key": "2d85882db067811d377cc44db50cb36f556954542b8644a8adde9f5ebe0e6966",
-    "decrypt_key": "025a8e2063e36bf019e360f7852b390f5612a53d5450c416c3751ed94d83fe73",
-    "n_key": "949f02d820e56e77cbfd1271d6bc1725b82767308edc8b0a9eded53d09f526c4",
-    "fingerprint_blob_key": "635c32ed33ce190c99412740d70bc44b6cca92345023a8183ea944d671a401a0"
+    "encrypt_key": "c9aa3c3e806c16a7c63e9245613a1d13d433f1376b31ad5389372d676fa90a8d",
+    "decrypt_key": "675b0db0e096b4c3568ef698bcafcd4bc636ec7f28bea439a0a6bba230da29ba",
+    "n_key": "2539d713805de566292606a0caa37dcd90af1ca426a7c0fff4ef76c98919d88b",
+    "fingerprint_blob_key": "3972d0148cc556d5f02934f6a0825392388adbe6493165c9cf5e91cc064d5c87"
   },
   "cipher": "AES-256-GCM",
   "wire_format": {
