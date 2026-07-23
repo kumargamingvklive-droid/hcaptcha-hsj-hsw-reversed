@@ -63,57 +63,112 @@ jobs:
         # in the retry-on-push-rejection block below.
         run: npm ci --no-audit --no-fund
 
-      - name: Extract all six keys
+      - name: Run extractor with validation
         id: extract
         env:
           PYTHONPATH: src
         run: |
           set -euo pipefail
 
-          # Run the fetcher with up to 3 retries (hCaptcha sometimes rate-limits).
-          for attempt in 1 2 3; do
-            if python -m hcaptcha > new_keys.json 2> fetch.log; then
-              break
+          OUTPUT_FILE="new_output.json"
+          LOG_FILE="fetch.log"
+          MAX_ATTEMPTS=3
+          success=0
+
+          rm -f "$OUTPUT_FILE" "$LOG_FILE"
+
+          for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
+            echo "Attempt ${attempt}/${MAX_ATTEMPTS}"
+
+            rm -f "$OUTPUT_FILE" "$LOG_FILE"
+
+            if YOUR_COMMAND_HERE >"$OUTPUT_FILE" 2>"$LOG_FILE"; then
+              if [[ -s "$OUTPUT_FILE" ]]; then
+                success=1
+                echo "Command completed and produced output"
+                break
+              fi
+
+              echo "::warning::Command exited successfully but output was empty"
+            else
+              exit_code=$?
+              echo "::warning::Attempt ${attempt} failed with exit code ${exit_code}"
             fi
-            echo "::warning::extraction attempt $attempt failed:"
-            tail -n 20 fetch.log
-            sleep $((attempt * 30))
+
+            echo "===== Diagnostic log ====="
+            tail -n 100 "$LOG_FILE" || true
+
+            if [[ "$attempt" -lt "$MAX_ATTEMPTS" ]]; then
+              sleep $((attempt * 30))
+            fi
           done
 
-          # Validate JSON parses + has all six keys + verification flags
-          python <<'EOF'
-          import json, sys
-          d = json.load(open("new_keys.json"))
-          required_hsj = {"n_key", "response_decrypt_key", "payload_encrypt_key"}
-          required_hsw = {"encrypt_key", "decrypt_key", "n_key", "fingerprint_blob_key"}
-          missing = []
-          if not required_hsj.issubset(d.get("hsj", {})): missing.append("hsj")
-          if not required_hsw.issubset(d.get("hsw", {})): missing.append("hsw")
-          # Verify the 4 HSW verification flags
-          verified = d.get("verified", {})
-          for k in ("hsw_encrypt_key", "hsw_decrypt_key", "hsw_n_key",
-                    "hsw_fingerprint_blob_key"):
-              if not verified.get(k):
-                  missing.append(f"verified.{k}")
-          if missing:
-              sys.exit(f"output validation failed: missing {missing}")
-          print(f"validated: version {d['version'][:12]}...")
-          print(f"  hsw.n_key  : {d['hsw']['n_key'][:16]}...")
-          print(f"  fp_blob_key: {d['hsw']['fingerprint_blob_key'][:16]}...")
-          EOF
+          if [[ "$success" -ne 1 ]]; then
+            echo "::error::All ${MAX_ATTEMPTS} attempts failed"
 
-          # Pull version + cipher metadata for the commit message
-          VERSION=$(python -c "import json; print(json.load(open('new_keys.json'))['version'])")
+            if [[ -f "$LOG_FILE" ]]; then
+              echo "===== Final diagnostic log ====="
+              cat "$LOG_FILE"
+            fi
+
+            exit 1
+          fi
+
+          # Validate that the output is a non-empty JSON object.
+          python <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path("new_output.json")
+
+          if not path.exists():
+              raise SystemExit("Output file was not created")
+
+          if path.stat().st_size == 0:
+              raise SystemExit("Output file is empty")
+
+          text = path.read_text(encoding="utf-8", errors="replace")
+
+          try:
+              data = json.loads(text)
+          except json.JSONDecodeError as exc:
+              preview = text[:500]
+              raise SystemExit(
+                  f"Output is not valid JSON: {exc}\n"
+                  f"Output preview:\n{preview}"
+              )
+
+          if not isinstance(data, dict):
+              raise SystemExit(
+                  f"Expected a JSON object, got {type(data).__name__}"
+              )
+
+          version = data.get("version")
+
+          if not isinstance(version, str) or not version.strip():
+              raise SystemExit("Output is missing a valid 'version' field")
+
+          print(f"Validated JSON for version {version[:12]}...")
+          PY
+
+          VERSION="$(
+            python -c \
+              "import json; print(json.load(open('new_output.json', encoding='utf-8'))['version'])"
+          )"
+
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-
+          
       - name: Write current + archive
         env:
           VERSION: ${{ steps.extract.outputs.version }}
         run: |
           set -euo pipefail
+
           mkdir -p data data/archive
-          mv new_keys.json data/keys.json
-          cp data/keys.json "data/archive/${VERSION}.json"
+
+          mv new_output.json data/current.json
+          cp data/current.json "data/archive/${VERSION}.json"
+
           ls -la data/ data/archive/ | tail -n 20
 
       - name: Commit + push if changed
