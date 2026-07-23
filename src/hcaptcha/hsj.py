@@ -65,23 +65,67 @@ class HSJKeyFetcher:
 
     def fetch_keys(self) -> dict:
         ops = [
-            ("n_key",                "hsj('IiI=.eyJzIjowLCJmIjowLCJjIjowfQ==.')", 0),
-            ("response_decrypt_key", "hsj(0, new Uint8Array(1024))",              1),
-            ("payload_encrypt_key",  "hsj(1, new Uint8Array(1024))",              2),
+            ("n_key", "hsj('IiI=.eyJzIjowLCJmIjowLCJjIjowfQ==.')"),
+            ("response_decrypt_key", "hsj(0, new Uint8Array(1024))"),
+            ("payload_encrypt_key", "hsj(1, new Uint8Array(1024))"),
         ]
+        
         keys = {"version": self.version}
-        for name, code, idx in ops:
-            t = time.time()
-            self.runtime.eval(code, suppress=True)
-            raw = self.runtime.eval("dumped_keys", byte_array=True)[idx]
-            key = bytes(raw).hex()
-            self.log.info(
-                f"{name.replace('_',' ').title()} -> {key}",
-                start=t, end=time.time(),
+
+for expected_index, (name, code) in enumerate(ops):
+    started = time.time()
+    self.runtime.eval(code, suppress=True)
+    
+    dumped = self.runtime.eval("dumped_keys", byte_array=True)
+    
+    if not isinstance(dumped, list):
+        raise RuntimeError(
+            f"HSJ capture returned {type(dumped).__name__}, expected list"
+        )
+        self.log.info(
+            f"{name}: capture count={len(dumped)}, "
+            f"expected index={expected_index}",
+            start=started,
+            end=time.time(),
+        )
+        
+        if expected_index >= len(dumped):
+            lengths = [
+                len(item) if hasattr(item, "__len__") else None
+                for item in dumped
+            ]
+            
+            raise RuntimeError(
+                f"HSJ capture missing for {name}: "
+                f"expected dumped_keys[{expected_index}], "
+                f"but only {len(dumped)} capture(s) exist; "
+                f"capture lengths={lengths}. "
+                "The current bundle structure or invoked entry-point "
+                "behaviour has changed."
             )
-            keys[name] = key
-        self.log.info("hsj keys fetched", start=time.time(), end=self.start_time)
-        return keys
+            
+            raw = dumped[expected_index]
+            
+            if len(raw) != 32:
+                raise RuntimeError(
+                    f"Invalid captured length for {name}: "
+                    f"expected 32 bytes, got {len(raw)}"
+                )
+                
+                key = bytes(raw).hex()
+                self.log.info(
+                    f"{name.replace('_', ' ').title()} captured",
+                    start=started,
+                    end=time.time(),
+                )
+                keys[name] = key
+                
+                self.log.info(
+                    "hsj keys fetched",
+                    start=self.start_time,
+                    end=time.time(),
+                )
+                return keys
 
 
 if __name__ == "__main__":
