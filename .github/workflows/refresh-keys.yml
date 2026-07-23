@@ -70,94 +70,108 @@ jobs:
         run: |
           set -euo pipefail
 
-          OUTPUT_FILE="new_output.json"
-          LOG_FILE="fetch.log"
-          MAX_ATTEMPTS=3
           success=0
+          rm -f new_keys.json fetch.log
 
-          rm -f "$OUTPUT_FILE" "$LOG_FILE"
+          for attempt in 1 2 3; do
+            echo "Extraction attempt ${attempt}/3"
 
-          for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
-            echo "Attempt ${attempt}/${MAX_ATTEMPTS}"
+            rm -f new_keys.json fetch.log
 
-            rm -f "$OUTPUT_FILE" "$LOG_FILE"
-
-            if YOUR_COMMAND_HERE >"$OUTPUT_FILE" 2>"$LOG_FILE"; then
-              if [[ -s "$OUTPUT_FILE" ]]; then
+            if python -m hcaptcha >new_keys.json 2>fetch.log; then
+              if [[ -s new_keys.json ]]; then
                 success=1
-                echo "Command completed and produced output"
                 break
               fi
 
-              echo "::warning::Command exited successfully but output was empty"
+              echo "::warning::Extractor exited successfully but produced empty output"
             else
-              exit_code=$?
-              echo "::warning::Attempt ${attempt} failed with exit code ${exit_code}"
+              echo "::warning::Extraction attempt ${attempt} failed"
             fi
 
-            echo "===== Diagnostic log ====="
-            tail -n 100 "$LOG_FILE" || true
+            tail -n 50 fetch.log || true
 
-            if [[ "$attempt" -lt "$MAX_ATTEMPTS" ]]; then
+            if [[ "$attempt" -lt 3 ]]; then
               sleep $((attempt * 30))
             fi
           done
 
           if [[ "$success" -ne 1 ]]; then
-            echo "::error::All ${MAX_ATTEMPTS} attempts failed"
-
-            if [[ -f "$LOG_FILE" ]]; then
-              echo "===== Final diagnostic log ====="
-              cat "$LOG_FILE"
-            fi
-
+            echo "::error::All extraction attempts failed"
+            echo "===== final fetch.log ====="
+            cat fetch.log || true
             exit 1
           fi
 
-          # Validate that the output is a non-empty JSON object.
-          python <<'PY'
+          python <<'EOF'
           import json
           from pathlib import Path
 
-          path = Path("new_output.json")
+          path = Path("new_keys.json")
 
           if not path.exists():
-              raise SystemExit("Output file was not created")
+              raise SystemExit("new_keys.json was not created")
 
           if path.stat().st_size == 0:
-              raise SystemExit("Output file is empty")
-
-          text = path.read_text(encoding="utf-8", errors="replace")
+              raise SystemExit("new_keys.json is empty")
 
           try:
-              data = json.loads(text)
+              d = json.loads(path.read_text(encoding="utf-8"))
           except json.JSONDecodeError as exc:
-              preview = text[:500]
+              preview = path.read_text(
+                  encoding="utf-8",
+                  errors="replace",
+              )[:500]
               raise SystemExit(
-                  f"Output is not valid JSON: {exc}\n"
+                  f"new_keys.json is invalid JSON: {exc}\n"
                   f"Output preview:\n{preview}"
               )
 
-          if not isinstance(data, dict):
+          required_hsj = {
+              "n_key",
+              "response_decrypt_key",
+              "payload_encrypt_key",
+          }
+          required_hsw = {
+              "encrypt_key",
+              "decrypt_key",
+              "n_key",
+              "fingerprint_blob_key",
+          }
+
+          missing = []
+
+          if not required_hsj.issubset(d.get("hsj", {})):
+              missing.append("hsj")
+
+          if not required_hsw.issubset(d.get("hsw", {})):
+              missing.append("hsw")
+
+          verified = d.get("verified", {})
+          for key in (
+              "hsw_encrypt_key",
+              "hsw_decrypt_key",
+              "hsw_n_key",
+              "hsw_fingerprint_blob_key",
+          ):
+              if not verified.get(key):
+                  missing.append(f"verified.{key}")
+
+          if missing:
               raise SystemExit(
-                  f"Expected a JSON object, got {type(data).__name__}"
+                  f"output validation failed: missing {missing}"
               )
 
-          version = data.get("version")
-
-          if not isinstance(version, str) or not version.strip():
-              raise SystemExit("Output is missing a valid 'version' field")
-
-          print(f"Validated JSON for version {version[:12]}...")
-          PY
+          print(f"validated: version {d['version'][:12]}...")
+          EOF
 
           VERSION="$(
             python -c \
-              "import json; print(json.load(open('new_output.json', encoding='utf-8'))['version'])"
+              "import json; print(json.load(open('new_keys.json', encoding='utf-8'))['version'])"
           )"
 
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          
+
       - name: Write current + archive
         env:
           VERSION: ${{ steps.extract.outputs.version }}
@@ -166,7 +180,7 @@ jobs:
 
           mkdir -p data data/archive
 
-          mv new_output.json data/current.json
+          mv new_keys.json data/current.json
           cp data/current.json "data/archive/${VERSION}.json"
 
           ls -la data/ data/archive/ | tail -n 20
